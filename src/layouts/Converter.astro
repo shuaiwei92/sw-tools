@@ -1,0 +1,137 @@
+---
+// 通用转换器布局：满屏、左输入 / 右输出，复用 formatter 的视觉与工具栏规范。
+// 通过 props 控制是否显示只读树、JSONPath 查询输入、下载文件名等；具体转换逻辑由页面 <script> 注入。
+import Base from './Base.astro';
+import Icon from '../components/Icon.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  toolName: string;
+  /** 是否提供只读树视图（输出为 JSON 时启用，默认 false） */
+  tree?: boolean;
+  /** 是否提供 JSONPath 查询输入（默认 false） */
+  query?: boolean;
+  queryLabel?: string;
+  queryPlaceholder?: string;
+  downloadName?: string;
+  downloadExt?: string;
+  categoryHref?: string;
+  categoryName?: string;
+  inputPlaceholder?: string;
+  outputLabel?: string;
+}
+const {
+  title,
+  description,
+  toolName,
+  tree = false,
+  query = false,
+  queryLabel = 'JSONPath',
+  queryPlaceholder = '如 $.store.book[0].title',
+  downloadName = 'result',
+  downloadExt = 'txt',
+  categoryHref = '/#json',
+  categoryName = 'JSON 工具',
+  inputPlaceholder = '在此粘贴内容…',
+  outputLabel = '输出',
+} = Astro.props;
+---
+
+<Base title={title} description={description} full>
+  <!-- 页头：单行紧凑，对齐 formatter -->
+  <div class="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+    <h1 class="text-lg font-bold">{toolName}</h1>
+    <nav class="flex items-center gap-1.5 text-xs" aria-label="面包屑">
+      <a
+        href="/"
+        class="cursor-pointer text-brand-600 transition hover:text-brand-700 hover:underline underline-offset-2"
+        title="返回首页">首页</a>
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <a
+        href={categoryHref}
+        class="cursor-pointer text-slate-400 transition hover:text-brand-600 hover:underline underline-offset-2 dark:text-slate-500"
+        title="查看分类下全部工具">{categoryName}</a>
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <span class="cursor-default font-medium text-slate-700 dark:text-slate-200" title="当前页面">{toolName}</span>
+    </nav>
+    <span class="text-xs text-slate-400">{description}</span>
+  </div>
+
+  <!-- 可选：JSONPath 查询输入（在双栏上方单独一行） -->
+  {
+    query && (
+      <div class="mt-2 flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-900">
+        <label for="query" class="shrink-0 text-sm font-semibold text-slate-600 dark:text-slate-300">
+          {queryLabel}
+        </label>
+        <input
+          id="query"
+          type="text"
+          spellcheck="false"
+          placeholder={queryPlaceholder}
+          class="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 font-mono text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+        />
+      </div>
+    )
+  }
+
+  <!-- 左右双栏：占满剩余视口高度，行高锁定不动态加高 -->
+  <div class="mt-2 grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)]">
+    <!-- 左：输入 -->
+    <section class="flex min-h-0 min-w-0 flex-col">
+      <div class="flex shrink-0 flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/60">
+        <span class="mr-1 text-sm font-semibold text-slate-600 dark:text-slate-300">输入</span>
+        <span class="mr-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
+        <button class="tool-btn tool-btn-sm" data-act="sample" title="载入示例"><Icon name="sample" /><span>示例</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="clear" title="清空输入"><Icon name="trash" /></button>
+        <slot name="input-tools" />
+      </div>
+      <textarea
+        id="input"
+        spellcheck="false"
+        placeholder={inputPlaceholder}
+        class="mt-0 min-h-[18rem] w-full flex-1 resize-none rounded-b-xl border border-slate-300 bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none focus:border-brand-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+      ></textarea>
+    </section>
+
+    <!-- 右：输出 / 树视图 -->
+    <section class="flex min-h-0 min-w-0 flex-col">
+      <div class="flex shrink-0 flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/60">
+        <span class="mr-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{outputLabel}</span>
+        {
+          tree && (
+            <>
+              <span class="mr-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
+              <button class="tool-btn tool-btn-sm" data-act="tree" title="在树视图与原文间切换"><Icon name="tree" /><span>树视图</span></button>
+              <button class="tool-btn tool-btn-sm" data-act="expand" title="展开所有节点"><Icon name="tree" /><span>展开全部</span></button>
+              <button class="tool-btn tool-btn-sm" data-act="collapse" title="折叠所有节点"><Icon name="tree" /><span>折叠全部</span></button>
+            </>
+          )
+        }
+        <span class="ml-auto flex items-center gap-1">
+          <button class="tool-btn tool-btn-sm" data-act="copy" title="复制结果到剪贴板"><Icon name="copy" /><span>复制</span></button>
+          <button class="tool-btn tool-btn-sm" data-act="download" title={`下载结果为 .${downloadExt} 文件`}><Icon name="download" /><span>下载</span></button>
+        </span>
+      </div>
+      <textarea
+        id="output"
+        readonly
+        spellcheck="false"
+        placeholder="结果将显示在此…"
+        class="mt-0 min-h-[18rem] w-full flex-1 resize-none rounded-b-xl border border-slate-300 bg-white p-3 font-mono text-sm leading-relaxed outline-none focus:border-brand-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+      ></textarea>
+      {
+        tree && (
+          <div
+            id="tree-panel"
+            class="mt-0 hidden min-h-[18rem] flex-1 overflow-auto rounded-b-xl border border-slate-200 bg-slate-50 p-3 font-mono text-sm lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+          ></div>
+        )
+      }
+    </section>
+  </div>
+
+  <!-- 状态栏：单行，不额外占空间 -->
+  <div id="status" class="mt-1.5 h-5 shrink-0 text-sm lg:mb-1"></div>
+</Base>

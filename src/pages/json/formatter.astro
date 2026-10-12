@@ -1,0 +1,890 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+---
+
+<Base title="JSON 格式化 · sw-tools" description="在线 JSON 格式化、压缩、校验工具" full>
+  <!-- 页头：单行紧凑，把纵向空间让给编辑区 -->
+  <div class="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+    <h1 class="text-lg font-bold">JSON 格式化</h1>
+    <nav class="flex items-center gap-1.5 text-xs" aria-label="面包屑">
+      <a
+        href="/"
+        class="cursor-pointer text-brand-600 transition hover:text-brand-700 hover:underline underline-offset-2"
+        title="返回首页"
+      >首页</a>
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <a
+        href="/#json"
+        class="cursor-pointer text-slate-400 transition hover:text-brand-600 hover:underline underline-offset-2 dark:text-slate-500"
+        title="查看 JSON 工具分类下的全部工具"
+      >JSON 工具</a>
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <span class="cursor-default font-medium text-slate-700 dark:text-slate-200" title="当前页面">格式化</span>
+    </nav>
+    <span class="text-xs text-slate-400">
+      失去焦点自动应用当前格式（格式化 / 压缩 / 排序键）；输入与历史记录均在本地浏览器处理（localStorage），不会上传任何服务器。
+    </span>
+  </div>
+
+  <!-- 历史记录侧栏 + 左右双栏：占满剩余视口高度 -->
+  <div class="mt-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto lg:flex-row lg:overflow-hidden">
+    <!-- 折叠态：窄条，点击展开 -->
+    <div
+      id="history-rail"
+      class="hidden w-full shrink-0 flex-row items-center justify-center rounded-xl border border-slate-200 bg-slate-50 py-1.5 lg:w-9 lg:flex-col lg:py-2 dark:border-slate-700 dark:bg-slate-900"
+    >
+      <button class="tool-btn tool-btn-sm" data-act="history-toggle" title="展开历史记录"><Icon name="clock" /></button>
+    </div>
+
+    <!-- 展开态：历史面板 -->
+    <aside
+      id="history-panel"
+      class="flex w-full shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 lg:w-60 dark:border-slate-700 dark:bg-slate-900"
+    >
+      <div class="flex shrink-0 items-center justify-between border-b border-slate-200 px-2 py-1.5 dark:border-slate-700">
+        <span class="flex items-center gap-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
+          <Icon name="clock" size={14} />
+          历史记录
+        </span>
+        <span class="flex items-center gap-0.5">
+          <button class="tool-btn tool-btn-sm" data-act="history-refresh" title="刷新历史列表"><Icon name="refresh" size={13} /></button>
+          <button class="tool-btn tool-btn-sm" data-act="history-clear" title="清空全部历史"><Icon name="trash" size={13} /></button>
+          <button class="tool-btn tool-btn-sm" data-act="history-toggle" title="收起历史栏"><Icon name="chevrons-left" size={13} /></button>
+        </span>
+      </div>
+      <div id="history-list" class="max-h-44 min-h-0 flex-1 overflow-y-auto p-1.5 lg:max-h-none"></div>
+    </aside>
+
+    <!-- 左右双栏：占满剩余视口高度，行高锁定不动态加高 -->
+    <div class="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)]">
+    <!-- 左：输入 -->
+    <section class="flex min-h-0 min-w-0 flex-col">
+      <div class="flex shrink-0 flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/60">
+        <span class="mr-1 text-sm font-semibold text-slate-600 dark:text-slate-300">输入</span>
+        <span class="mr-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
+        <button class="tool-btn tool-btn-sm" data-act="format" title="格式化（美化）"><Icon name="format" /><span>格式化</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="minify" title="压缩为单行"><Icon name="minify" /><span>压缩</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="sort" title="按字母序排序对象键"><Icon name="sort" /><span>排序键</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="validate" title="校验 JSON 合法性"><Icon name="check" /><span>校验</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="escape" title="转为 JSON 字符串字面量"><Icon name="escape" /><span>转义</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="unescape" title="解析 JSON 字符串字面量"><Icon name="escape" /><span>反转义</span></button>
+        <span class="ml-auto flex items-center gap-1">
+          <button class="tool-btn tool-btn-sm" data-act="sample" title="载入示例"><Icon name="sample" /></button>
+          <button class="tool-btn tool-btn-sm" data-act="clear" title="清空输入"><Icon name="trash" /></button>
+        </span>
+      </div>
+      <textarea
+        id="input"
+        spellcheck="false"
+        placeholder="在此粘贴 JSON…（失去焦点后自动应用当前格式）"
+        class="mt-0 min-h-[18rem] w-full flex-1 resize-none rounded-b-xl border border-slate-300 bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none focus:border-brand-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+      ></textarea>
+    </section>
+
+    <!-- 右：输出 / 树视图 -->
+    <section class="flex min-h-0 min-w-0 flex-col">
+      <div class="flex shrink-0 flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/60">
+        <span class="mr-1 text-sm font-semibold text-slate-600 dark:text-slate-300">输出</span>
+        <span class="mr-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
+        <button class="tool-btn tool-btn-sm" data-act="tree" title="树视图为输出的默认呈现（有内容时不可切换）"><Icon name="tree" /><span>树视图</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="expand" title="展开所有节点"><Icon name="tree" /><span>展开全部</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="collapse" title="折叠所有节点"><Icon name="tree" /><span>折叠全部</span></button>
+        <label class="ml-2 flex items-center gap-1 text-xs text-slate-500">
+          搜索
+          <input
+            id="tree-search"
+            type="text"
+            placeholder="过滤节点…"
+            class="w-28 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+          />
+        </label>
+        <span class="ml-auto flex items-center gap-1">
+          <button class="tool-btn tool-btn-sm" data-act="copy" title="复制结果到剪贴板"><Icon name="copy" /><span>复制</span></button>
+          <button class="tool-btn tool-btn-sm" data-act="download" title="下载结果为 .json 文件"><Icon name="download" /><span>下载</span></button>
+          <label for="indent" class="flex items-center gap-1.5 text-xs text-slate-500">
+            缩进
+            <select
+              id="indent"
+              class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="2">2 空格</option>
+              <option value="4">4 空格</option>
+              <option value="tab">Tab</option>
+            </select>
+          </label>
+        </span>
+      </div>
+      <textarea
+        id="output"
+        readonly
+        spellcheck="false"
+        placeholder="结果将显示在此…"
+        class="hidden mt-0 min-h-[18rem] w-full flex-1 resize-none rounded-b-xl border border-slate-300 bg-white p-3 font-mono text-sm leading-relaxed outline-none focus:border-brand-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+      ></textarea>
+      <div
+        id="tree-panel"
+        class="mt-0 min-h-[18rem] flex-1 overflow-auto rounded-b-xl border border-slate-200 bg-slate-50 p-3 font-mono text-sm lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+      ></div>
+    </section>
+    </div>
+  </div>
+
+  <!-- 状态栏：单行，不额外占空间 -->
+  <div id="status" class="mt-1.5 h-5 shrink-0 text-sm lg:mb-1"></div>
+</Base>
+
+<script>
+  // 注意：本文件位于 src/pages/json/，相对路径需回退两级到 src/lib/
+  import {
+    formatJson,
+    minifyJson,
+    sortKeysJson,
+    validateJson,
+    escapeJsonString,
+    unescapeJsonString,
+  } from '../../lib/json/format';
+
+  const input = document.getElementById('input') as HTMLTextAreaElement;
+  const output = document.getElementById('output') as HTMLTextAreaElement;
+  const statusEl = document.getElementById('status') as HTMLDivElement;
+  const treePanel = document.getElementById('tree-panel') as HTMLDivElement;
+  const treeSearch = document.getElementById('tree-search') as HTMLInputElement | null;
+  const indentSel = document.getElementById('indent') as HTMLSelectElement;
+  const historyPanel = document.getElementById('history-panel') as HTMLElement;
+  const historyRail = document.getElementById('history-rail') as HTMLElement;
+  const historyList = document.getElementById('history-list') as HTMLElement;
+  const treeBtn = document.querySelector('[data-act="tree"]') as HTMLButtonElement | null;
+
+  let treeVisible = true;
+  // 当前「视图模式」：失焦自动应用的就是该模式。点「压缩」后切到 minify 并持续保持，直到再次点「格式化 / 排序键」。
+  let currentMode: 'format' | 'minify' | 'sort' = 'format';
+  const TREE_EMPTY_HINT =
+    '<div class="text-slate-400">在左侧粘贴 JSON 后，此处显示结构化树视图，支持点击节点折叠 / 展开。「展开全部 / 折叠全部」可一键控制嵌套层级。</div>';
+
+  const TRASH_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>`;
+
+  const SAMPLE = `{
+  "name": "sw-tools",
+  "version": "0.1",
+  "tools": ["json-formatter", "base64"],
+  "nested": { "b": 2, "a": 1, "list": [3, 1, 2] },
+  "active": true
+}`;
+
+  // ---------- 历史记录（localStorage，本地不出浏览器） ----------
+  const HKEY = 'json-formatter-history-v1';
+  const HMAX = 50;
+  type HistoryItem = { id: number; size: number; content: string };
+  let historyItems: HistoryItem[] = [];
+
+  function loadHistory(): HistoryItem[] {
+    try {
+      const arr = JSON.parse(localStorage.getItem(HKEY) ?? '[]') as HistoryItem[];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(items: HistoryItem[]) {
+    try {
+      localStorage.setItem(HKEY, JSON.stringify(items));
+    } catch {
+      /* 存储空间不足时静默忽略 */
+    }
+  }
+
+  function fmtSize(n: number): string {
+    return n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B';
+  }
+
+  function fmtTime(ts: number): string {
+    const d = new Date(ts);
+    const p = (x: number) => String(x).padStart(2, '0');
+    return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  /** 新增历史：相同内容去重（移到顶部并刷新时间），上限 HMAX 条 */
+  function addHistory(content: string) {
+    if (!content.trim()) return;
+    let items = loadHistory();
+    const existing = items.findIndex((it) => it.content === content);
+    if (existing !== -1) {
+      const [it] = items.splice(existing, 1);
+      it.id = Date.now();
+      items.unshift(it);
+    } else {
+      items.unshift({ id: Date.now(), size: content.length, content });
+      if (items.length > HMAX) items = items.slice(0, HMAX);
+    }
+    saveHistory(items);
+    renderHistory();
+  }
+
+  function renderHistory() {
+    historyItems = loadHistory();
+    if (!historyItems.length) {
+      historyList.innerHTML =
+        '<div class="p-2 text-xs text-slate-400">暂无历史记录。格式化成功后会自动保存到这里。</div>';
+      return;
+    }
+    historyList.innerHTML = '';
+    historyItems.forEach((it, i) => {
+      const row = document.createElement('div');
+      row.dataset.hidx = String(i);
+      row.className =
+        'mb-1 cursor-pointer rounded-lg border border-transparent px-2 py-1.5 hover:border-brand-300 hover:bg-white dark:hover:border-slate-600 dark:hover:bg-slate-800';
+      const preview = it.content.replace(/\s+/g, ' ').slice(0, 60);
+      row.innerHTML = `
+        <div class="flex items-center justify-between gap-1">
+          <span class="text-xs text-slate-500 dark:text-slate-400">${fmtTime(it.id)}</span>
+          <span class="flex items-center gap-1.5">
+            <span class="text-[10px] text-slate-400">${fmtSize(it.size)}</span>
+            <button data-hact="del" data-idx="${i}" title="删除此条" class="text-rose-500 transition hover:text-rose-600 dark:text-rose-400">${TRASH_ICON}</button>
+          </span>
+        </div>
+        <div class="truncate text-xs text-slate-600 dark:text-slate-300">${escapeHtml(preview)}</div>`;
+      historyList.appendChild(row);
+    });
+  }
+
+  function setHistoryOpen(open: boolean) {
+    if (open) {
+      historyPanel.classList.remove('hidden');
+      historyPanel.classList.add('flex');
+      historyRail.classList.add('hidden');
+      historyRail.classList.remove('flex');
+    } else {
+      historyPanel.classList.add('hidden');
+      historyPanel.classList.remove('flex');
+      historyRail.classList.remove('hidden');
+      historyRail.classList.add('flex');
+    }
+  }
+
+  function setStatus(msg: string, ok = true) {
+    statusEl.textContent = msg;
+    statusEl.className = `mt-1.5 h-5 shrink-0 text-sm lg:mb-1 ${
+      ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+    }`;
+  }
+
+  function getIndent(): number | string {
+    const v = indentSel.value;
+    return v === 'tab' ? '\t' : Number(v);
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string
+    );
+  }
+
+  function showOutputView() {
+    treePanel.classList.add('hidden');
+    output.classList.remove('hidden');
+    treeVisible = false;
+  }
+
+  function showTreeView() {
+    output.classList.add('hidden');
+    treePanel.classList.remove('hidden');
+    treeVisible = true;
+    updateTreeButton();
+  }
+
+  /** 树视图按钮状态：有输出内容时点亮（品牌色）并禁用；无内容时恢复中性且禁用 */
+  function updateTreeButton() {
+    if (!treeBtn) return;
+    const hasOutput = output.value.trim().length > 0;
+    if (hasOutput) {
+      treeBtn.classList.add('tree-btn-active');
+      treeBtn.disabled = true;
+      treeBtn.title = '树视图为输出的默认呈现（有内容时不可切换）';
+    } else {
+      treeBtn.classList.remove('tree-btn-active');
+      treeBtn.disabled = true;
+      treeBtn.title = '树视图（输出内容后默认点亮）';
+    }
+  }
+
+  /** 转义 / 反转义结果在树面板中以纯文本呈现，避免切到原文视图（保持树视图为默认） */
+  function showEscapedText(text: string, label: string) {
+    currentData = undefined;
+    treePanel.innerHTML = `<div class="break-words whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">${escapeHtml(text)}</div>`;
+    showTreeView();
+  }
+
+  /** 当前树视图的数据源（由左侧输入解析而来），编辑树节点后同步回写 */
+  let currentData: unknown = undefined;
+  /** 折叠节点路径集合（重渲染后保留展开/折叠状态） */
+  const collapsed = new Set<string>();
+
+  function pathKey(path: (string | number)[]): string {
+    return JSON.stringify(path);
+  }
+
+  /** 根据左侧输入解析并渲染树视图（右栏默认展示形态） */
+  function renderTreeFromInput() {
+    const text = input.value;
+    if (!text.trim()) {
+      currentData = undefined;
+      treePanel.innerHTML = TREE_EMPTY_HINT;
+      showTreeView();
+      return;
+    }
+    const r = validateJson(text);
+    if (!r.ok) {
+      currentData = undefined;
+      treePanel.innerHTML = `<div class="text-rose-600 dark:text-rose-400">无法生成树视图：${escapeHtml(
+        r.error
+      )}${r.line ? `（第 ${r.line} 行，第 ${r.column} 列）` : ''}</div>`;
+      showTreeView();
+      return;
+    }
+    currentData = r.value;
+    renderTreeFromData();
+  }
+
+  /** 由 currentData 渲染树（编辑后同步用，不重新解析输入） */
+  function renderTreeFromData() {
+    treePanel.innerHTML = '';
+    if (currentData === undefined) {
+      treePanel.innerHTML = TREE_EMPTY_HINT;
+      showTreeView();
+      return;
+    }
+    treePanel.appendChild(buildNode(currentData, 'root', []));
+    showTreeView();
+  }
+
+  /** 将转换结果写回输入框（原位编辑），并刷新右侧树视图与输出框 */
+  function applyToInput(transformed: string, msg: string) {
+    input.value = transformed;
+    output.value = transformed;
+    renderTreeFromInput();
+    setStatus(msg);
+  }
+
+  /** 收集所有可折叠节点（对象/数组）的路径 */
+  function collectContainerPaths(value: unknown, path: (string | number)[], out: (string | number)[][]) {
+    if (value && typeof value === 'object') {
+      out.push(path);
+      const entries: [string, unknown][] = Array.isArray(value)
+        ? (value as unknown[]).map((v, i) => [String(i), v])
+        : Object.entries(value as Record<string, unknown>);
+      for (const [k, v] of entries) collectContainerPaths(v, [...path, Array.isArray(value) ? Number(k) : k], out);
+    }
+  }
+
+  /** 一键展开 / 折叠所有嵌套节点（基于路径集合，重渲染不丢状态） */
+  function setAllNodes(open: boolean) {
+    if (!treeVisible) {
+      setStatus('请先切换到树视图再展开 / 折叠', false);
+      return;
+    }
+    if (currentData === undefined) return;
+    const paths: (string | number)[][] = [];
+    collectContainerPaths(currentData, [], paths);
+    if (open) collapsed.clear();
+    else paths.forEach((p) => collapsed.add(pathKey(p)));
+    renderTreeFromData();
+    setStatus(open ? '已展开全部节点' : '已折叠全部节点');
+  }
+
+  /** 按当前模式（格式化 / 压缩 / 排序键）转换输入；非法 JSON 返回 ok:false */
+  function transformByMode(text: string): {
+    ok: boolean;
+    value?: string;
+    error?: string;
+    line?: number;
+    column?: number;
+  } {
+    const r = validateJson(text);
+    if (!r.ok) return { ok: false, error: r.error, line: r.line, column: r.column };
+    let value: string;
+    if (currentMode === 'minify') value = minifyJson(text);
+    else if (currentMode === 'sort') value = sortKeysJson(text, getIndent());
+    else value = formatJson(text, getIndent());
+    return { ok: true, value };
+  }
+
+  /** 失焦自动应用当前模式；点「压缩」后模式为 minify，后续失焦仍保持压缩，不会被重新格式化覆盖 */
+  function autoFormat() {
+    const text = input.value;
+    if (!text.trim()) return;
+    const res = transformByMode(text);
+    if (!res.ok) {
+      setStatus(`✗ ${res.error}${res.line ? `（第 ${res.line} 行，第 ${res.column} 列）` : ''}`, false);
+      return;
+    }
+    input.value = res.value!;
+    output.value = res.value!;
+    renderTreeFromInput();
+    // 仅「格式化」模式（真正的失焦自动美化）写入历史；压缩 / 排序由按钮动作驱动，避免重复写入
+    if (currentMode === 'format') addHistory(res.value!);
+    const label = currentMode === 'minify' ? '压缩' : currentMode === 'sort' ? '排序' : '格式化';
+    setStatus(`✓ JSON 合法，已自动${label}（${text.length} 字符 → ${res.value!.length} 字符）`);
+  }
+
+  function run(action: string) {
+    const text = input.value;
+    try {
+      switch (action) {
+        case 'format':
+          currentMode = 'format';
+          applyToInput(formatJson(text, getIndent()), '已格式化（已应用到输入框）');
+          break;
+        case 'minify':
+          currentMode = 'minify';
+          applyToInput(minifyJson(text), '已压缩为单行（已应用到输入框）');
+          break;
+        case 'sort':
+          currentMode = 'sort';
+          applyToInput(sortKeysJson(text, getIndent()), '已按字母序排序键（已应用到输入框）');
+          break;
+        case 'validate': {
+          const r = validateJson(text);
+          if (r.ok) setStatus('✓ JSON 合法');
+          else setStatus(`✗ ${r.error}${r.line ? `（第 ${r.line} 行，第 ${r.column} 列）` : ''}`, false);
+          break;
+        }
+        case 'escape':
+          output.value = escapeJsonString(text);
+          showEscapedText(output.value, '已转义');
+          setStatus('已转义为 JSON 字符串（见右侧面板）');
+          break;
+        case 'unescape':
+          output.value = unescapeJsonString(text);
+          showEscapedText(output.value, '已反转义');
+          setStatus('已反转义（见右侧面板）');
+          break;
+        case 'copy': {
+          try {
+            const data = formatJson(text, getIndent());
+            navigator.clipboard.writeText(data).then(() => setStatus('已复制结果到剪贴板'));
+          } catch {
+            setStatus('输入无效，无法复制', false);
+          }
+          break;
+        }
+        case 'download': {
+          try {
+            const data = formatJson(text, getIndent());
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'data.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            setStatus('已下载 data.json');
+          } catch {
+            setStatus('输入无效，无法下载', false);
+          }
+          break;
+        }
+        case 'sample':
+          input.value = SAMPLE;
+          applyToInput(formatJson(SAMPLE, getIndent()), '已载入示例并格式化（已应用到输入框）');
+          break;
+        case 'clear':
+          input.value = '';
+          output.value = '';
+          renderTreeFromInput();
+          setStatus('');
+          input.focus();
+          break;
+        case 'tree':
+          toggleTree();
+          break;
+        case 'expand':
+          setAllNodes(true);
+          break;
+        case 'collapse':
+          setAllNodes(false);
+          break;
+        case 'history-toggle':
+          setHistoryOpen(!historyPanel.classList.contains('hidden') ? false : true);
+          break;
+        case 'history-refresh':
+          renderHistory();
+          setStatus('历史记录已刷新');
+          break;
+        case 'history-clear':
+          if (confirm('确定清空全部历史记录？此操作不可恢复。')) {
+            saveHistory([]);
+            renderHistory();
+            setStatus('已清空全部历史记录');
+          }
+          break;
+      }
+    } catch (e) {
+      setStatus(`✗ ${(e as Error).message}`, false);
+    }
+  }
+
+  function toggleTree() {
+    if (treeVisible) {
+      // 当前是树视图 → 切回原文（输出框）
+      if (!output.value) {
+        setStatus('暂无输出内容，请先格式化或粘贴有效 JSON', false);
+        return;
+      }
+      showOutputView();
+      setStatus('已切换到原文视图');
+    } else {
+      // 当前是原文 → 切回树视图
+      renderTreeFromInput();
+      setStatus('已切换到树视图');
+    }
+  }
+
+  // ---------- 树节点数据编辑（同步回写左侧 JSON） ----------
+
+  function getDataAt(path: (string | number)[]): unknown {
+    let cur: unknown = currentData;
+    for (const seg of path) {
+      cur = (cur as Record<string, unknown>)[typeof seg === 'number' ? seg : seg];
+    }
+    return cur;
+  }
+
+  function setDataAtPath(path: (string | number)[], value: unknown) {
+    if (!path.length) {
+      currentData = value;
+      return;
+    }
+    const parentPath = path.slice(0, -1);
+    const last = path[path.length - 1];
+    const parent = getDataAt(parentPath);
+    if (parent && typeof parent === 'object') {
+      (parent as Record<string, unknown>)[typeof last === 'number' ? last : last] = value;
+    }
+  }
+
+  /** 编辑值后：写回数据 → 序列化同步左侧 → 重渲染（保留折叠状态） */
+  function serializeAndSync(msg: string, ok = true) {
+    try {
+      const text = JSON.stringify(currentData, null, getIndent());
+      input.value = text;
+      output.value = text;
+      renderTreeFromData();
+      setStatus(msg, ok);
+    } catch (e) {
+      setStatus(`✗ 同步失败：${(e as Error).message}`, false);
+    }
+  }
+
+  function onValueEdit(e: FocusEvent) {
+    const el = e.target as HTMLElement;
+    const path = JSON.parse(el.dataset.vpath as string) as (string | number)[];
+    const raw = (el.textContent ?? '').trim();
+    let parsed: unknown;
+    if (raw === '') {
+      parsed = '';
+    } else {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = el.textContent ?? '';
+      }
+    }
+    setDataAtPath(path, parsed);
+    serializeAndSync('✓ 已修改值，左侧 JSON 已同步');
+  }
+
+  function onKeyEdit(e: FocusEvent) {
+    const el = e.target as HTMLElement;
+    const parentPath = JSON.parse(el.dataset.kpath as string) as (string | number)[];
+    const oldKey = el.dataset.oldkey as string;
+    const newKey = (el.textContent ?? '').trim();
+    if (!newKey || newKey === oldKey) {
+      el.textContent = oldKey;
+      return;
+    }
+    const parent = getDataAt(parentPath) as Record<string, unknown>;
+    if (!parent || typeof parent !== 'object' || Array.isArray(parent) || newKey in parent) {
+      el.textContent = oldKey;
+      setStatus(newKey in parent ? '✗ 键名已存在，已还原' : '✗ 键名不能为空，已还原', false);
+      return;
+    }
+    // 保持键顺序的原位重命名
+    const obj: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(parent)) obj[k === oldKey ? newKey : k] = v;
+    setDataAtPath(parentPath, obj);
+    serializeAndSync('✓ 已修改键名，左侧 JSON 已同步');
+  }
+
+  function onDeleteNode(e: MouseEvent) {
+    const btn = e.target as HTMLElement;
+    const path = JSON.parse(btn.dataset.delpath as string) as (string | number)[];
+    const parentPath = path.slice(0, -1);
+    const last = path[path.length - 1];
+    const parent = getDataAt(parentPath);
+    if (!parent || typeof parent !== 'object') return;
+    if (Array.isArray(parent)) (parent as unknown[]).splice(typeof last === 'number' ? last : Number(last), 1);
+    else delete (parent as Record<string, unknown>)[last as string];
+    serializeAndSync('已删除该节点，左侧 JSON 已同步');
+  }
+
+  /** 可编辑 key 元素（父级为对象时可编辑，数组索引不可编辑） */
+  function makeKeyEl(key: string, parentPath: (string | number)[], editable: boolean): HTMLElement {
+    const keyEl = document.createElement('span');
+    keyEl.textContent = key;
+    keyEl.className =
+      'rounded border border-transparent px-1 font-semibold text-[#1d4ed8] outline-none dark:text-blue-400';
+    if (editable) {
+      keyEl.contentEditable = 'true';
+      keyEl.spellcheck = false;
+      keyEl.classList.add('cursor-text', 'hover:border-blue-300', 'focus:border-[#1d4ed8]', 'focus:bg-white', 'dark:focus:bg-slate-900');
+      keyEl.dataset.kpath = pathKey(parentPath);
+      keyEl.dataset.oldkey = key;
+      keyEl.addEventListener('blur', onKeyEdit);
+    }
+    return keyEl;
+  }
+
+  /** 删除按钮（黄色小 chip，参照截图样式） */
+  function makeDelBtn(path: (string | number)[]): HTMLElement {
+    const del = document.createElement('button');
+    del.textContent = '删除';
+    del.title = '删除此节点';
+    del.dataset.delpath = pathKey(path);
+    del.addEventListener('click', onDeleteNode);
+    del.className =
+      'del-btn rounded border border-amber-300 bg-amber-100 px-1.5 text-xs text-rose-600 opacity-0 transition hover:bg-amber-200 group-hover:opacity-100 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-rose-400';
+    return del;
+  }
+
+  function makeValueEl(value: unknown, path: (string | number)[]): HTMLElement {
+    const val = document.createElement('span');
+    val.textContent = value === null ? 'null' : String(value);
+    val.className =
+      'rounded border border-transparent px-1 font-medium text-[#059669] outline-none cursor-text hover:border-emerald-200 focus:border-[#059669] focus:bg-white dark:text-emerald-400 dark:focus:bg-slate-900';
+    val.contentEditable = 'true';
+    val.spellcheck = false;
+    val.dataset.vpath = pathKey(path);
+    val.addEventListener('blur', onValueEdit);
+    return val;
+  }
+
+  // ---------- 树视图增强：类型徽标 / 复制路径 / 搜索过滤 ----------
+
+  function typeLabel(value: unknown): string {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return 'arr';
+    if (typeof value === 'object') return 'obj';
+    return typeof value === 'string' ? 'str' : typeof value === 'number' ? 'num' : typeof value === 'boolean' ? 'bool' : '?';
+  }
+
+  /** 由路径数组生成 JSONPath 风格字符串，如 $.nested.list[0] */
+  function buildPathString(path: (string | number)[]): string {
+    if (!path.length) return '$';
+    let s = '$';
+    for (const seg of path) s += typeof seg === 'number' ? `[${seg}]` : `.${seg}`;
+    return s;
+  }
+
+  /** 复制路径按钮（黄色小 chip，hover 显示，与删除按钮风格一致） */
+  function makeCopyPathBtn(path: (string | number)[]): HTMLElement {
+    const b = document.createElement('button');
+    b.textContent = '路径';
+    b.title = '复制此节点的 JSONPath';
+    b.className =
+      'copy-path-btn rounded border border-slate-200 bg-white px-1 text-[10px] text-slate-400 opacity-0 transition hover:border-brand-300 hover:text-brand-600 group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500';
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const p = buildPathString(path);
+      navigator.clipboard.writeText(p).then(() => setStatus('已复制路径：' + p));
+    });
+    return b;
+  }
+
+  /** 递归搜索过滤：匹配节点（或含匹配后代）显示并展开，其余隐藏 */
+  function wrapSearch(wrap: HTMLElement, q: string): boolean {
+    const row = wrap.firstElementChild as HTMLElement | null;
+    const selfText = ((row && row.getAttribute('data-st')) || '').toLowerCase();
+    const children = wrap.querySelector(':scope > .tree-children') as HTMLElement | null;
+    let childMatch = false;
+    if (children) {
+      children.querySelectorAll(':scope > div').forEach((c) => {
+        if (wrapSearch(c as HTMLElement, q)) childMatch = true;
+      });
+    }
+    const match = selfText.includes(q) || childMatch;
+    wrap.style.display = match ? '' : 'none';
+    if (children) children.style.display = childMatch ? '' : 'none';
+    return match;
+  }
+
+  function applyTreeSearch(q: string) {
+    if (!q) {
+      if (treeSearch) treeSearch.value = '';
+      renderTreeFromData();
+      return;
+    }
+    setAllNodes(true); // 先全展开，便于看到匹配项
+    treePanel.querySelectorAll(':scope > div').forEach((w) => wrapSearch(w as HTMLElement, q));
+  }
+
+  const ROW_CLS = 'group flex flex-wrap items-center gap-1 rounded px-0.5 hover:bg-slate-100 dark:hover:bg-slate-800';
+
+  function buildNode(value: unknown, key: string, path: (string | number)[], parentIsArr = false): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.className = 'my-0.5';
+    const isRoot = path.length === 0;
+    // 父级为对象时 key 可编辑，数组元素（索引）不可编辑
+    const keyEditable = !isRoot && !parentIsArr;
+
+    if (value && typeof value === 'object') {
+      const isArr = Array.isArray(value);
+      const entries: [string, unknown][] = isArr
+        ? (value as unknown[]).map((v, i) => [String(i), v])
+        : Object.entries(value as Record<string, unknown>);
+      const pk = pathKey(path);
+      const open = !collapsed.has(pk);
+
+      const row = document.createElement('div');
+      row.className = ROW_CLS;
+      row.dataset.st = isRoot ? 'root' : key;
+
+      if (!isRoot) {
+        row.appendChild(makeKeyEl(key, path.slice(0, -1), keyEditable));
+        const colon = document.createElement('span');
+        colon.className = 'text-slate-400';
+        colon.textContent = ':';
+        row.appendChild(colon);
+      }
+
+      const toggle = document.createElement('span');
+      toggle.className = 'cursor-pointer select-none text-xs text-slate-500 dark:text-slate-400';
+      toggle.textContent = open ? '▼' : '▸';
+
+      const bracket = document.createElement('span');
+      bracket.className = 'cursor-pointer select-none';
+      bracket.innerHTML = `<span class="font-semibold text-slate-600 dark:text-slate-300">${isArr ? '[' : '{'}</span> <span class="font-semibold text-yellow-700 dark:text-yellow-500">${entries.length}</span> <span class="text-[10px] text-slate-400">+</span> <span class="font-semibold text-slate-600 dark:text-slate-300">${isArr ? ']' : '}'}</span>`;
+
+      const doToggle = () => {
+        if (collapsed.has(pk)) collapsed.delete(pk);
+        else collapsed.add(pk);
+        const nowOpen = !collapsed.has(pk);
+        toggle.textContent = nowOpen ? '▼' : '▸';
+        children.style.display = nowOpen ? '' : 'none';
+      };
+      toggle.addEventListener('click', doToggle);
+      bracket.addEventListener('click', doToggle);
+
+      row.appendChild(toggle);
+      row.appendChild(bracket);
+      if (!isRoot) {
+        row.appendChild(makeDelBtn(path));
+        row.appendChild(makeCopyPathBtn(path));
+      }
+      wrap.appendChild(row);
+
+      const children = document.createElement('div');
+      children.className = 'tree-children ml-4 border-l border-slate-200 pl-2 dark:border-slate-700';
+      if (!open) children.style.display = 'none';
+      for (const [k, v] of entries) {
+        children.appendChild(buildNode(v, k, [...path, isArr ? Number(k) : k], isArr));
+      }
+      wrap.appendChild(children);
+    } else {
+      const row = document.createElement('div');
+      row.className = ROW_CLS;
+      row.dataset.st = (isRoot ? 'root' : key) + ' ' + String(value === null ? 'null' : value);
+      if (!isRoot) {
+        row.appendChild(makeKeyEl(key, path.slice(0, -1), keyEditable));
+        const colon = document.createElement('span');
+        colon.className = 'text-slate-400';
+        colon.textContent = ':';
+        row.appendChild(colon);
+      }
+      const badge = document.createElement('span');
+      badge.className =
+        'rounded bg-slate-200 px-1 text-[10px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300';
+      badge.textContent = typeLabel(value);
+      row.appendChild(badge);
+      row.appendChild(makeValueEl(value, path));
+      if (!isRoot) {
+        row.appendChild(makeDelBtn(path));
+        row.appendChild(makeCopyPathBtn(path));
+      }
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  // 事件绑定：功能按钮
+  document.querySelectorAll('[data-act]').forEach((btn) => {
+    btn.addEventListener('click', () => run((btn as HTMLElement).dataset.act as string));
+  });
+
+  // 失焦自动格式化
+  input.addEventListener('blur', autoFormat);
+
+  // 树视图内可编辑元素：Enter 直接提交（失焦），阻止换行
+  treePanel.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).isContentEditable) {
+      e.preventDefault();
+      (e.target as HTMLElement).blur();
+    }
+  });
+
+  // 缩进变更：按当前模式重排并写回输入框（压缩模式缩进无意义，仍保持压缩）
+  indentSel.addEventListener('change', () => {
+    if (!input.value.trim()) return;
+    const res = transformByMode(input.value);
+    if (!res.ok) return; // 输入非法时静默，等 blur/校验再提示
+    input.value = res.value!;
+    output.value = res.value!;
+    renderTreeFromInput();
+    const label = currentMode === 'minify' ? '压缩' : currentMode === 'sort' ? '排序' : '格式化';
+    setStatus(`已按 ${indentSel.value === 'tab' ? 'Tab' : indentSel.value + ' 空格'} 缩进重新${label}`);
+  });
+
+  // 树视图搜索过滤
+  treeSearch?.addEventListener('input', () =>
+    applyTreeSearch((treeSearch!.value || '').trim().toLowerCase())
+  );
+
+  // 历史列表事件委托：点击条目载入 / 点击 ✕ 删除
+  historyList.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const del = target.closest('[data-hact="del"]') as HTMLElement | null;
+    if (del) {
+      e.stopPropagation();
+      historyItems.splice(Number(del.dataset.idx), 1);
+      saveHistory(historyItems);
+      renderHistory();
+      setStatus('已删除该条历史记录');
+      return;
+    }
+    const row = target.closest('[data-hidx]') as HTMLElement | null;
+    if (!row) return;
+    const item = historyItems[Number(row.dataset.hidx)];
+    if (!item) return;
+    input.value = item.content;
+    try {
+      applyToInput(formatJson(item.content, getIndent()), '已载入历史记录并格式化');
+    } catch (err) {
+      renderTreeFromInput();
+      setStatus(`已载入历史记录（内容非法：${(err as Error).message}）`, false);
+    }
+  });
+
+  // 初次加载：右栏默认树视图、历史面板默认展开
+  renderTreeFromInput();
+  renderHistory();
+  setHistoryOpen(true);
+
+  // 快捷键：Ctrl/Cmd + Enter 立即格式化
+  input.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      run('format');
+    }
+  });
+</script>

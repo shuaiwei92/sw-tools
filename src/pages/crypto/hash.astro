@@ -1,0 +1,48 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="哈希计算 · sw-tools"
+  description="SHA-1 / 256 / 384 / 512 哈希（Web Crypto 本地计算，不上传服务器）。"
+  toolName="哈希计算"
+  inputPlaceholder="在此粘贴待哈希的文本…（失去焦点后自动计算）"
+  outputLabel="哈希值"
+  downloadName="hash"
+  downloadExt="txt"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    算法
+    <select
+      id="algo"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="SHA-256">SHA-256</option>
+      <option value="SHA-1">SHA-1</option>
+      <option value="SHA-384">SHA-384</option>
+      <option value="SHA-512">SHA-512</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { hashText, type HashAlgo } from '../../lib/crypto/hash';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = 'sw-tools';
+
+  setupConverter({
+    downloadName: 'hash',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const algo = (document.getElementById('algo') as HTMLSelectElement).value as HashAlgo;
+      return hashText(input, algo);
+    },
+    sample: SAMPLE,
+  });
+
+  // 算法切换时立即重算
+  document.getElementById('algo')?.addEventListener('change', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>

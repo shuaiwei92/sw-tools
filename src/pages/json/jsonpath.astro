@@ -1,0 +1,41 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="JSONPath 查询 · sw-tools"
+  description="用 JSONPath 表达式在 JSON 中提取节点，纯浏览器本地处理。"
+  toolName="JSONPath 查询"
+  tree={true}
+  query={true}
+  queryPlaceholder="如 $.store.book[0].title 或 $..price"
+  inputPlaceholder="在此粘贴 JSON…（输入表达式后自动查询）"
+  outputLabel="结果"
+  downloadName="result"
+  downloadExt="json"
+/>
+
+<script>
+  import { queryJson } from '../../lib/convert/jsonpath';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE_JSON = `{
+  "store": {
+    "book": [
+      { "category": "fiction", "author": "Herman Melville", "title": "Moby Dick", "price": 8.99 },
+      { "category": "fiction", "author": "J. R. R. Tolkien", "title": "The Lord of the Rings", "price": 22.99 }
+    ],
+    "bicycle": { "color": "red", "price": 19.95 }
+  }
+}`;
+
+  setupConverter({
+    tree: true,
+    query: true,
+    downloadName: 'result',
+    downloadExt: 'json',
+    convert: (input, expr) => queryJson(input, expr ?? ''),
+    sample: SAMPLE_JSON,
+    querySample: '$.store.book[?(@.price < 10)].title',
+  });
+</script>

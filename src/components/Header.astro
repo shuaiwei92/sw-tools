@@ -1,0 +1,386 @@
+---
+import Icon from './Icon.astro';
+import { SITE } from '../consts';
+import { toolsByCategory } from '../lib/tools';
+
+const groups = toolsByCategory();
+const currentPath = Astro.url.pathname;
+---
+<header
+  id="site-header"
+  class="sticky top-0 z-30 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80"
+>
+  <div class="flex w-full items-center justify-between px-4 py-2">
+    <a href="/" class="flex items-center gap-2 font-semibold" aria-label="返回首页">
+      <span class="grid h-7 w-7 place-items-center rounded-lg bg-brand-600 text-white">{SITE.logo}</span>
+      <span>{SITE.name}</span>
+    </a>
+
+    <!-- 桌面端：按分类生成导航，点开仅展开该组工具 -->
+    <nav class="hidden items-center gap-0.5 lg:flex" id="cat-nav" aria-label="工具分类">
+      {
+        groups.map((g) => {
+          const twoCol = g.items.length > 4;
+          return (
+          <div class="relative" data-cat-wrap={g.category}>
+            <button
+              class="cat-btn flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+              data-cat={g.category}
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              {g.meta.name}
+              <svg class="h-3 w-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div
+              id={`panel-${g.category}`}
+              class:list={[
+                'cat-panel absolute left-0 top-full z-20 mt-2 hidden rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900',
+                twoCol ? 'w-[40rem] max-w-[calc(100vw-2rem)]' : 'w-64',
+              ]}
+              role="menu"
+            >
+              <div class="mb-1 flex items-center gap-1.5 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                <Icon name={g.meta.icon} size={13} />
+                {g.meta.name}
+                <span class="ml-auto text-[10px] font-normal normal-case text-slate-300 dark:text-slate-600">{g.items.length}</span>
+              </div>
+              <div class:list={['gap-0.5', twoCol ? 'grid grid-cols-2' : 'flex flex-col']}>
+                {g.items.map((t) =>
+                  t.status === 'ready' ? (
+                    <a
+                      href={t.path}
+                      role="menuitem"
+                      class:list={[
+                        'flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition',
+                        currentPath === t.path
+                          ? 'bg-brand-50 font-medium text-brand-600 dark:bg-brand-950 dark:text-brand-300'
+                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                      ]}
+                    >
+                      <Icon name={t.icon} size={16} class="mt-0.5 shrink-0 text-slate-400" />
+                      <span class="min-w-0">
+                        <span class="block truncate">{t.name}</span>
+                        <span class="block truncate text-xs text-slate-400">{t.description}</span>
+                      </span>
+                    </a>
+                  ) : (
+                    <span class="flex cursor-not-allowed items-start gap-2 rounded-md px-2 py-1.5 text-sm text-slate-400 opacity-60 dark:text-slate-600" title="即将上线">
+                      <Icon name={t.icon} size={16} class="mt-0.5 shrink-0" />
+                      <span class="min-w-0">
+                        <span class="block truncate">{t.name}</span>
+                        <span class="block truncate text-xs">即将上线</span>
+                      </span>
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+          );
+        })
+      }
+    </nav>
+
+    <nav class="flex items-center gap-3">
+      <!-- 全局搜索：⌘K / / 唤起 -->
+      <div class="relative" id="search-wrap">
+        <button
+          id="search-toggle"
+          type="button"
+          class="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+          aria-haspopup="true"
+          aria-expanded="false"
+        >
+          <Icon name="search" class="h-4 w-4" />
+          <span class="hidden sm:inline">搜索</span>
+          <kbd class="hidden rounded border border-slate-300 px-1 text-[10px] leading-4 text-slate-400 dark:border-slate-600 sm:inline">⌘K</kbd>
+        </button>
+        <div
+          id="search-panel"
+          class="absolute right-0 top-full z-20 mt-2 hidden w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          role="dialog"
+          aria-label="工具搜索"
+        >
+          <div class="flex items-center gap-2 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800">
+            <Icon name="search" class="h-4 w-4 shrink-0 text-slate-400" />
+            <input
+              id="tools-search"
+              type="text"
+              placeholder="搜索工具…"
+              autocomplete="off"
+              class="w-full bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100"
+            />
+            <kbd class="rounded border border-slate-300 px-1 text-[10px] leading-4 text-slate-400 dark:border-slate-600">Esc</kbd>
+          </div>
+          <div id="tools-results" class="max-h-[70vh] overflow-y-auto p-2">
+            {
+              groups.map((g) => (
+                <div class="tools-group px-1 py-1.5" data-group>
+                  <div class="mb-1 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    <Icon name={g.meta.icon} size={13} />
+                    {g.meta.name}
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-0.5">
+                    {g.items.map((t) => {
+                      const hay = `${t.name} ${t.tags.join(' ')} ${g.meta.name}`.toLowerCase();
+                      return t.status === 'ready' ? (
+                        <a
+                          href={t.path}
+                          data-tool
+                          data-hay={hay}
+                          class:list={[
+                            'tools-item flex items-center rounded-md px-2 py-1.5 text-sm transition',
+                            currentPath === t.path
+                              ? 'bg-brand-50 font-medium text-brand-600 dark:bg-brand-950 dark:text-brand-300'
+                              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                          ]}
+                        >
+                          <Icon name={t.icon} size={15} class="mr-2 shrink-0 text-slate-400" />
+                          <span class="truncate">{t.name}</span>
+                        </a>
+                      ) : (
+                        <span class="flex cursor-not-allowed items-center rounded-md px-2 py-1.5 text-sm text-slate-400 opacity-60 dark:text-slate-600" title="即将上线">
+                          <Icon name={t.icon} size={15} class="mr-2 shrink-0" />
+                          {t.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            }
+            <div id="tools-empty" class="hidden px-3 py-6 text-center text-sm text-slate-400">
+              未找到匹配的工具
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 移动端：折叠为单个工具菜单 -->
+      <button
+        id="mobile-toggle"
+        type="button"
+        class="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-white lg:hidden"
+        aria-haspopup="true"
+        aria-expanded="false"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        工具
+      </button>
+
+      <button
+        id="theme-toggle"
+        class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+        title="切换深/浅色"
+        aria-label="切换主题"
+      >
+        <Icon name="moon" class="hidden dark:block" />
+        <Icon name="sun" class="block dark:hidden" />
+      </button>
+    </nav>
+  </div>
+
+  <!-- 移动端面板：所有分类堆叠，全宽下拉 -->
+  <div
+    id="mobile-panel"
+    class="absolute left-0 right-0 top-full z-20 hidden border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 lg:hidden"
+  >
+    <div class="grid gap-3 sm:grid-cols-2">
+      {
+        groups.map((g) => (
+          <div>
+            <div class="mb-1 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+              <Icon name={g.meta.icon} size={13} />
+              {g.meta.name}
+            </div>
+            <div class="flex flex-col gap-0.5">
+              {g.items.map((t) =>
+                t.status === 'ready' ? (
+                  <a
+                    href={t.path}
+                    class:list={[
+                      'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition',
+                      currentPath === t.path
+                        ? 'bg-brand-50 font-medium text-brand-600 dark:bg-brand-950 dark:text-brand-300'
+                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                    ]}
+                  >
+                    <Icon name={t.icon} size={15} class="shrink-0 text-slate-400" />
+                    <span class="truncate">{t.name}</span>
+                  </a>
+                ) : (
+                  <span class="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-400 opacity-60 dark:text-slate-600">
+                    <Icon name={t.icon} size={15} class="shrink-0" />
+                    {t.name}
+                  </span>
+                )
+              )}
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</header>
+
+<style>
+  .cat-btn.cat-open,
+  #search-toggle[aria-expanded='true'] {
+    color: var(--color-brand-600);
+    background: var(--color-slate-100);
+  }
+  :global(.dark) .cat-btn.cat-open,
+  :global(.dark) #search-toggle[aria-expanded='true'] {
+    color: var(--color-brand-300);
+    background: var(--color-slate-800);
+  }
+  /* 搜索结果键盘导航高亮态 */
+  .tools-item.tools-active {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: -2px;
+    background: var(--color-slate-100);
+  }
+  :global(.dark) .tools-item.tools-active {
+    background: var(--color-slate-800);
+  }
+</style>
+
+<script>
+  const header = document.getElementById('site-header');
+  const searchWrap = document.getElementById('search-wrap');
+  const searchToggle = document.getElementById('search-toggle') as HTMLButtonElement | null;
+  const searchPanel = document.getElementById('search-panel');
+  const input = document.getElementById('tools-search') as HTMLInputElement | null;
+  const empty = document.getElementById('tools-empty');
+  const results = document.getElementById('tools-results');
+  const mobileToggle = document.getElementById('mobile-toggle') as HTMLButtonElement | null;
+  const mobilePanel = document.getElementById('mobile-panel');
+
+  let activeIdx = -1;
+
+  function closeAll() {
+    document.querySelectorAll('.cat-panel').forEach((p) => p.classList.add('hidden'));
+    document.querySelectorAll('[data-cat]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    document.querySelectorAll('.cat-btn').forEach((b) => b.classList.remove('cat-open'));
+    searchPanel?.classList.add('hidden');
+    searchToggle?.setAttribute('aria-expanded', 'false');
+    mobilePanel?.classList.add('hidden');
+    mobileToggle?.setAttribute('aria-expanded', 'false');
+    if (input) {
+      input.value = '';
+      filter('');
+    }
+    activeIdx = -1;
+  }
+
+  function openSearch() {
+    closeAll();
+    searchPanel?.classList.remove('hidden');
+    searchToggle?.setAttribute('aria-expanded', 'true');
+    input?.focus();
+    input?.select();
+  }
+
+  function visibleItems(): HTMLAnchorElement[] {
+    return Array.from(results?.querySelectorAll('a[data-tool]') ?? []).filter(
+      (a) => !(a as HTMLElement).hidden
+    ) as HTMLAnchorElement[];
+  }
+
+  function setActive(i: number) {
+    const items = visibleItems();
+    if (!items.length) return;
+    activeIdx = (i + items.length) % items.length;
+    items.forEach((a, idx) => a.classList.toggle('tools-active', idx === activeIdx));
+    items[activeIdx].scrollIntoView({ block: 'nearest' });
+  }
+
+  function filter(q: string) {
+    const query = q.trim().toLowerCase();
+    let anyVisible = false;
+    results?.querySelectorAll('[data-group]').forEach((group) => {
+      let sectionVisible = false;
+      group.querySelectorAll('a[data-tool]').forEach((a) => {
+        const hay = (a as HTMLElement).dataset.hay ?? '';
+        const match = !query || hay.includes(query);
+        (a as HTMLElement).hidden = !match;
+        if (match) sectionVisible = true;
+      });
+      (group as HTMLElement).hidden = !sectionVisible;
+      if (sectionVisible) anyVisible = true;
+    });
+    if (empty) empty.classList.toggle('hidden', anyVisible);
+    activeIdx = -1;
+  }
+
+  // 分类 mega-menu：点开仅展开该组，并关闭其它面板
+  document.querySelectorAll('[data-cat]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cat = (btn as HTMLElement).dataset.cat!;
+      const panel = document.getElementById(`panel-${cat}`);
+      const willOpen = panel?.classList.contains('hidden');
+      closeAll();
+      if (willOpen) {
+        panel?.classList.remove('hidden');
+        btn.setAttribute('aria-expanded', 'true');
+        btn.classList.add('cat-open');
+      }
+    });
+  });
+
+  searchToggle?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = searchPanel?.classList.contains('hidden');
+    closeAll();
+    if (willOpen) openSearch();
+  });
+
+  mobileToggle?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const willOpen = mobilePanel?.classList.contains('hidden');
+    closeAll();
+    if (willOpen) {
+      mobilePanel?.classList.remove('hidden');
+      mobileToggle.setAttribute('aria-expanded', 'true');
+    }
+  });
+
+  input?.addEventListener('input', () => filter(input.value));
+  input?.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive(activeIdx + 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive(activeIdx - 1);
+    } else if (e.key === 'Enter') {
+      const items = visibleItems();
+      if (items[activeIdx]) {
+        e.preventDefault();
+        window.location.href = items[activeIdx].href;
+      }
+    } else if (e.key === 'Escape') {
+      closeAll();
+      searchToggle?.focus();
+    }
+  });
+
+  // 点击外部 / Esc 关闭
+  document.addEventListener('click', (e) => {
+    if (header && !header.contains(e.target as Node)) closeAll();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAll();
+    const typing = ['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName ?? '');
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      const hidden = searchPanel?.classList.contains('hidden');
+      hidden ? openSearch() : closeAll();
+    } else if (e.key === '/' && !typing && searchPanel?.classList.contains('hidden')) {
+      e.preventDefault();
+      openSearch();
+    }
+  });
+</script>

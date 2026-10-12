@@ -1,0 +1,5 @@
+﻿node_modules/.vite/deps -> absent
+node_modules/.vite/.metadata.json -> absent
+node_modules/.vite/_metadata.json -> absent
+node_modules/.vite/packages -> absent
+.vite -> cleared entirely

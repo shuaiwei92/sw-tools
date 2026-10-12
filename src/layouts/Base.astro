@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** 满屏模式：页面内容占满视口剩余高度（工具页用），锁定 body 高度并放开宽度限制 */
+  full?: boolean;
+}
+const { title = 'sw-tools', description = '开发者在线工具箱', full = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN" class="h-full">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <!-- 在首屏绘制前同步设置主题，避免深浅色闪烁 -->
+    <script is:inline>
+      (function () {
+        try {
+          var t = localStorage.getItem('theme');
+          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body
+    class:list={[
+      'flex flex-col bg-white text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-100',
+      full ? 'h-full overflow-hidden' : 'min-h-full',
+    ]}
+  >
+    <Header />
+    <main
+      class:list={[
+        'w-full flex-1 px-4 py-4',
+        full ? 'flex flex-col overflow-y-auto lg:overflow-hidden' : '',
+      ]}
+    >
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

@@ -1,0 +1,46 @@
+---
+import Converter from '../../layouts/Converter.astro';
+import { TEXT_OPS } from '../../lib/text/process';
+---
+
+<Converter
+  title="文本处理 · sw-tools"
+  description="大小写、排序去重、URL / HTML 编解码、统计等纯前端文本变换。"
+  toolName="文本处理"
+  inputPlaceholder="在此粘贴文本…（失去焦点后自动处理）"
+  outputLabel="输出"
+  downloadName="result"
+  downloadExt="txt"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    操作
+    <select
+      id="op"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      {TEXT_OPS.map((o) => <option value={o.id}>{o.label}</option>)}
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { processText, type TextOp } from '../../lib/text/process';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = 'apple\nBanana\n cherry\napple\n  date  ';
+
+  setupConverter({
+    downloadName: 'result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const op = (document.getElementById('op') as HTMLSelectElement).value as TextOp;
+      return processText(input, op);
+    },
+    sample: SAMPLE,
+  });
+
+  // 操作切换时立即重算
+  document.getElementById('op')?.addEventListener('change', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>

@@ -1,0 +1,69 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="JSON ↔ CSV · sw-tools"
+  description="JSON 与 CSV 双向转换（对象数组 ↔ 表头+数据行），纯浏览器本地处理。"
+  toolName="JSON ↔ CSV"
+  tree={true}
+  inputPlaceholder="在此粘贴 JSON 或 CSV…（自动识别方向，失去焦点后转换）"
+  outputLabel="输出"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="json2csv">JSON → CSV</option>
+      <option value="csv2json">CSV → JSON</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { jsonToCsv, csvToJson } from '../../lib/convert/jsonCsv';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE_JSON = `[
+  { "id": 1, "name": "Alice", "active": true },
+  { "id": 2, "name": "Bob", "active": false },
+  { "id": 3, "name": "Cara", "active": true }
+]`;
+  const SAMPLE_CSV = `id,name,active
+1,Alice,true
+2,Bob,false
+3,Cara,true`;
+
+  // 自动识别方向：以 [ 开头且能解析为 JSON 数组 → JSON→CSV；否则 CSV→JSON
+  function detectDir(input: string): string {
+    const t = input.trim();
+    if (/^\[/.test(t)) {
+      try {
+        const v = JSON.parse(t);
+        if (Array.isArray(v)) return 'json2csv';
+      } catch {
+        /* 不是合法 JSON，按 CSV 处理 */
+      }
+    }
+    return 'csv2json';
+  }
+
+  setupConverter({
+    tree: true,
+    downloadName: 'result',
+    convert: (input) => {
+      const dir = (document.getElementById('direction') as HTMLSelectElement).value;
+      return dir === 'csv2json' ? csvToJson(input) : jsonToCsv(input);
+    },
+    getDirection: () => (document.getElementById('direction') as HTMLSelectElement).value,
+    detectDirection: detectDir,
+    directionLabels: { json2csv: 'JSON → CSV', csv2json: 'CSV → JSON' },
+    sampleFor: (dir) => (dir === 'csv2json' ? SAMPLE_CSV : SAMPLE_JSON),
+    sample: SAMPLE_JSON,
+    getDownloadExt: () =>
+      (document.getElementById('direction') as HTMLSelectElement).value === 'csv2json' ? 'json' : 'csv',
+  });
+</script>

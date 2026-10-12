@@ -1,0 +1,341 @@
+---
+import Base from '../layouts/Base.astro';
+import Icon from '../components/Icon.astro';
+import ToolCard from '../components/ToolCard.astro';
+import { toolsByCategory } from '../lib/tools';
+import { SITE } from '../consts';
+
+const groups = toolsByCategory();
+const allTools = groups.flatMap((g) => g.items);
+const totalTools = allTools.length;
+
+// 首页快捷入口：挑 4 个高频工具，作为控制台式快速启动
+const quickIds = ['json-formatter', 'base64', 'timestamp', 'hash'];
+const byId = Object.fromEntries(allTools.map((t) => [t.id, t]));
+const picks = quickIds.map((id) => byId[id]).filter(Boolean);
+---
+
+<Base title={`${SITE.name} · 开发者在线工具箱`} description={SITE.description}>
+  <!-- 展示字 + 等宽点缀字体（仅首页加载，不影响工具页） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <div class="home">
+    <!-- 氛围层：点阵网格 + indigo 辉光（装饰，无交互） -->
+    <div class="home-atmos" aria-hidden="true"></div>
+
+    <!-- HERO：非对称左对齐控制台式首屏 -->
+    <header class="home-hero reveal">
+      <span class="kicker">// DEVELOPER TOOLBOX · LOCAL-FIRST</span>
+      <h1 class="wordmark">sw-<span class="accent">tools</span></h1>
+      <p class="lede">{SITE.description}</p>
+
+      <div class="quick-row" role="navigation" aria-label="快捷工具">
+        {
+          picks.map((t) => (
+            <a class="chip" href={t.path}>
+              <Icon name={t.icon} class="chip-ic" />
+              <span>{t.name}</span>
+            </a>
+          ))
+        }
+      </div>
+
+      <dl class="stat-strip">
+        <div>
+          <dt>{totalTools}</dt>
+          <dd>个可用工具</dd>
+        </div>
+        <div>
+          <dt>0KB</dt>
+          <dd>数据上传</dd>
+        </div>
+        <div>
+          <dt>∞</dt>
+          <dd>本地优先</dd>
+        </div>
+      </dl>
+    </header>
+
+    <!-- 分类：编辑式索引（左侧编号栏 + 右侧卡片网格，非对称两栏） -->
+    {
+      groups.map((g, gi) => (
+        <section id={g.category} class="cat-row reveal" style={`--i:${gi}`}>
+          <div class="cat-rail">
+            <span class="cat-index">{String(gi + 1).padStart(2, '0')}</span>
+            <h2 class="cat-name">
+              <Icon name={g.meta.icon} class="cat-ic" />
+              {g.meta.name}
+            </h2>
+            <span class="cat-count">{g.items.length} 个工具</span>
+          </div>
+          <div class="cat-grid">
+            {g.items.map((t) => (
+              <ToolCard tool={t} />
+            ))}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</Base>
+
+<style>
+  /* ===== 设计令牌（仅作用于首页） ===== */
+  .home {
+    --ink: #0b0c10;
+    --paper: #fafaf9;
+    --muted: #6b7280;
+    --line: rgba(15, 23, 42, 0.1);
+    --accent: #4f46e5;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    margin: -1rem -1rem 0;
+    padding: 1rem;
+  }
+
+  /* 暗色模式令牌覆盖，与全站 .dark 切换一致 */
+  :global(.dark) .home {
+    --ink: #f5f5f4;
+    --muted: #a1a1aa;
+    --line: rgba(255, 255, 255, 0.12);
+    --accent: #818cf8;
+  }
+
+  /* ===== 氛围层 ===== */
+  .home-atmos {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image:
+      radial-gradient(60rem 38rem at 86% -8%, rgba(79, 70, 229, 0.16), transparent 60%),
+      radial-gradient(42rem 30rem at -6% 6%, rgba(79, 70, 229, 0.1), transparent 55%);
+  }
+  .home-atmos::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(15, 23, 42, 0.16) 1px, transparent 1px);
+    background-size: 22px 22px;
+    -webkit-mask-image: linear-gradient(to bottom, #000, transparent 72%);
+    mask-image: linear-gradient(to bottom, #000, transparent 72%);
+    opacity: 0.5;
+  }
+  :global(.dark) .home-atmos {
+    background-image:
+      radial-gradient(60rem 38rem at 86% -8%, rgba(99, 102, 241, 0.24), transparent 60%),
+      radial-gradient(42rem 30rem at -6% 6%, rgba(99, 102, 241, 0.14), transparent 55%);
+  }
+  :global(.dark) .home-atmos::before {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+  }
+
+  /* ===== HERO ===== */
+  .home-hero {
+    position: relative;
+    z-index: 1;
+    padding: clamp(2.5rem, 6vw, 5rem) 0 2.5rem;
+  }
+  .kicker {
+    display: inline-block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .wordmark {
+    margin: 0.4rem 0 0.7rem;
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 700;
+    font-size: clamp(3.5rem, 11vw, 8rem);
+    line-height: 0.92;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .wordmark .accent {
+    color: var(--accent);
+  }
+  .lede {
+    max-width: 48ch;
+    font-size: clamp(1rem, 1.4vw, 1.15rem);
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  /* 快捷入口芯片 */
+  .quick-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1.75rem;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 0.95rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.82rem;
+    text-decoration: none;
+    transition:
+      border-color 0.18s var(--ease),
+      background 0.18s var(--ease),
+      color 0.18s var(--ease),
+      transform 0.18s var(--ease);
+  }
+  .chip:hover {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+    transform: translateY(-2px);
+  }
+  .chip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .chip-ic {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* 统计条 */
+  .stat-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.75rem;
+    margin: 2.5rem 0 0;
+  }
+  .stat-strip dt {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 700;
+    font-size: 2.1rem;
+    line-height: 1;
+    color: var(--ink);
+  }
+  .stat-strip dd {
+    margin: 0.4rem 0 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* ===== 分类编辑式索引 ===== */
+  .cat-row {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 2rem;
+    padding: 2.5rem 0;
+    border-top: 1px solid var(--line);
+  }
+  .cat-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+  .cat-index {
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 700;
+    font-size: 2.5rem;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .cat-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'Chakra Petch', sans-serif;
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: var(--ink);
+  }
+  .cat-ic {
+    width: 20px;
+    height: 20px;
+    color: var(--accent);
+  }
+  .cat-count {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.74rem;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .cat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    align-content: start;
+  }
+
+  /* ===== 入场序列（错峰 + 降级） ===== */
+  .reveal {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  .reveal.in {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity 0.6s var(--ease),
+      transform 0.6s var(--ease);
+    transition-delay: calc(var(--i, 0) * 70ms);
+  }
+
+  /* ===== 响应式：窄屏取消两栏，编号栏移至卡片上方 ===== */
+  @media (max-width: 860px) {
+    .cat-row {
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+    }
+    .cat-rail {
+      flex-direction: row;
+      align-items: baseline;
+      gap: 0.75rem;
+    }
+    .cat-index {
+      font-size: 1.6rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+</style>
+
+<script>
+  // 入场编排：首屏立即显示，分类区随滚动错峰进入
+  const home = document.querySelector('.home');
+  if (home) {
+    const hero = home.querySelector('.home-hero');
+    hero?.classList.add('in');
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            e.target.classList.add('in');
+            io.unobserve(e.target);
+          }
+        }
+      },
+      { threshold: 0.12 }
+    );
+    home.querySelectorAll('.cat-row.reveal').forEach((el) => io.observe(el));
+  }
+</script>

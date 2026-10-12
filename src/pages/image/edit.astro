@@ -1,0 +1,317 @@
+---
+import Base from '../../layouts/Base.astro';
+import Icon from '../../components/Icon.astro';
+
+const CATEGORY = { href: '/#image', name: '图片处理' };
+const TOOL = '裁剪 / 翻转 / 旋转';
+---
+
+<Base title={`${TOOL} · sw-tools`} description="拖拽裁剪、水平/垂直翻转、旋转 90°/180°/270°，全部在本地浏览器完成。">
+  <div class="mx-auto flex w-full max-w-5xl flex-col gap-4">
+    <div>
+      <h1 class="text-xl font-bold">{TOOL}</h1>
+      <nav class="mt-1 flex items-center gap-1.5 text-xs" aria-label="面包屑">
+        <a href="/" class="cursor-pointer text-brand-600 transition hover:text-brand-700 hover:underline underline-offset-2" title="返回首页">首页</a>
+        <span class="text-slate-300 dark:text-slate-600">/</span>
+        <a href={CATEGORY.href} class="cursor-pointer text-slate-400 transition hover:text-brand-600 hover:underline underline-offset-2 dark:text-slate-500" title="查看分类下全部工具">{CATEGORY.name}</a>
+        <span class="text-slate-300 dark:text-slate-600">/</span>
+        <span class="cursor-default font-medium text-slate-700 dark:text-slate-200">{TOOL}</span>
+      </nav>
+      <p class="mt-2 text-sm text-slate-500">
+        在预览图上拖拽选框裁剪，或用按钮翻转 / 旋转。所有操作均在本地完成，下载为 PNG（无损、保留透明）。
+      </p>
+    </div>
+
+    <label
+      id="drop"
+      class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center transition hover:border-brand-500 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-400"
+    >
+      <Icon name="crop" size={28} class="text-slate-400" />
+      <span class="text-sm font-medium text-slate-600 dark:text-slate-300">拖拽图片到此处，或点击选择文件</span>
+      <span class="text-xs text-slate-400">支持 PNG / JPEG / WebP 等</span>
+      <input id="file" type="file" accept="image/*" class="hidden" />
+    </label>
+
+    <div id="workspace" class="hidden flex-col gap-4">
+      <!-- 工具条 -->
+      <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        <button class="tool-btn tool-btn-sm" data-act="flip-h" title="水平翻转"><Icon name="flip" size={15} /><span>水平翻转</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="flip-v" title="垂直翻转"><Icon name="flip" size={15} class="rotate-90" /><span>垂直翻转</span></button>
+        <span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
+        <button class="tool-btn tool-btn-sm" data-act="rot-90" title="顺时针旋转 90°">↻ 90°</button>
+        <button class="tool-btn tool-btn-sm" data-act="rot-180" title="旋转 180°">↻ 180°</button>
+        <button class="tool-btn tool-btn-sm" data-act="rot-270" title="顺时针旋转 270°">↻ 270°</button>
+        <span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
+        <button class="tool-btn tool-btn-sm" data-act="apply-crop" title="将选框区域裁切为当前图"><Icon name="crop" size={15} /><span>应用裁剪</span></button>
+        <button class="tool-btn tool-btn-sm" data-act="reset-sel" title="选框恢复为整图">整图选框</button>
+        <button class="tool-btn tool-btn-sm" data-act="reset" title="恢复原始图片">重置</button>
+        <button id="download" class="tool-btn tool-btn-sm ml-auto" title="下载当前图片（PNG）"><Icon name="download" size={15} /><span>下载</span></button>
+      </div>
+
+      <!-- 预览 + 选框 -->
+      <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div class="grid flex-1 place-items-center overflow-auto rounded-lg border border-slate-100 bg-[repeating-conic-gradient(#e5e7eb_0deg_90deg,#fff_90deg_180deg)] bg-[length:16px_16px] p-3 dark:border-slate-800 dark:bg-[repeating-conic-gradient(#1e293b_0deg_90deg,#0f172a_90deg_180deg)]">
+          <div id="stage" class="relative inline-block leading-none">
+            <canvas id="preview" class="block max-w-full"></canvas>
+            <div id="sel" class="absolute cursor-move border-2 border-brand-500 bg-brand-500/10">
+              <span id="sel-handle" class="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-brand-600"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 选框数值微调 -->
+        <div class="flex flex-wrap items-end gap-3 text-sm">
+          <span class="font-medium text-slate-600 dark:text-slate-300">选框（像素）：</span>
+          <label class="flex items-center gap-1">X<input id="cx" type="number" min="0" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+          <label class="flex items-center gap-1">Y<input id="cy" type="number" min="0" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+          <label class="flex items-center gap-1">宽<input id="cw" type="number" min="1" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+          <label class="flex items-center gap-1">高<input id="ch" type="number" min="1" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+          <span id="dims" class="ml-auto font-mono text-xs text-slate-400"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="h-5 text-sm text-slate-500" role="status" aria-live="polite"></div>
+  </div>
+</Base>
+
+<style>
+  #sel { touch-action: none; }
+</style>
+
+<script>
+  import {
+    loadImage,
+    imageToCanvas,
+    flipCanvas,
+    rotateCanvas,
+    cropCanvas,
+    download,
+    outName,
+  } from '../../lib/image/process';
+
+  const drop = document.getElementById('drop') as HTMLLabelElement;
+  const fileInput = document.getElementById('file') as HTMLInputElement;
+  const workspace = document.getElementById('workspace') as HTMLDivElement;
+  const stage = document.getElementById('stage') as HTMLDivElement;
+  const preview = document.getElementById('preview') as HTMLCanvasElement;
+  const selEl = document.getElementById('sel') as HTMLDivElement;
+  const handle = document.getElementById('sel-handle') as HTMLSpanElement;
+  const cx = document.getElementById('cx') as HTMLInputElement;
+  const cy = document.getElementById('cy') as HTMLInputElement;
+  const cw = document.getElementById('cw') as HTMLInputElement;
+  const ch = document.getElementById('ch') as HTMLInputElement;
+  const dims = document.getElementById('dims') as HTMLSpanElement;
+  const statusEl = document.getElementById('status') as HTMLDivElement;
+  const downloadBtn = document.getElementById('download') as HTMLButtonElement;
+
+  let work: HTMLCanvasElement | null = null;
+  let original: HTMLCanvasElement | null = null;
+  let originalName = 'image';
+  let sel = { x: 0, y: 0, w: 0, h: 0 };
+
+  // 拖拽状态
+  let drag: 'move' | 'resize' | null = null;
+  let startPX = 0;
+  let startPY = 0;
+  let startSel = { ...sel };
+
+  function setStatus(msg: string, ok = true) {
+    statusEl.textContent = msg;
+    statusEl.className = `h-5 text-sm ${ok ? 'text-slate-500' : 'text-red-600'}`;
+  }
+
+  function cloneCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = src.width;
+    c.height = src.height;
+    c.getContext('2d')!.drawImage(src, 0, 0);
+    return c;
+  }
+
+  function dispScale(): number {
+    if (!preview.width) return 1;
+    return preview.clientWidth / preview.width;
+  }
+
+  function resetSel() {
+    if (!work) return;
+    sel = { x: 0, y: 0, w: work.width, h: work.height };
+    syncInputs();
+    updateOverlay();
+  }
+
+  function syncInputs() {
+    cx.value = String(Math.round(sel.x));
+    cy.value = String(Math.round(sel.y));
+    cw.value = String(Math.round(sel.w));
+    ch.value = String(Math.round(sel.h));
+  }
+
+  function updateOverlay() {
+    const s = dispScale();
+    selEl.style.left = `${sel.x * s}px`;
+    selEl.style.top = `${sel.y * s}px`;
+    selEl.style.width = `${sel.w * s}px`;
+    selEl.style.height = `${sel.h * s}px`;
+  }
+
+  function render() {
+    if (!work) return;
+    preview.width = work.width;
+    preview.height = work.height;
+    preview.getContext('2d')!.drawImage(work, 0, 0);
+    dims.textContent = `当前 ${work.width} × ${work.height} px`;
+    updateOverlay();
+  }
+
+  function clamp(v: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, v));
+  }
+
+  function onFile(file: File) {
+    if (!file) return;
+    setStatus('正在读取图片…');
+    loadImage(file)
+      .then((img) => {
+        work = imageToCanvas(img);
+        original = cloneCanvas(work);
+        originalName = file.name;
+        workspace.classList.remove('hidden');
+        workspace.classList.add('flex');
+        resetSel();
+        render();
+        setStatus('已载入，可拖拽选框裁剪或翻转 / 旋转');
+      })
+      .catch((e: Error) => setStatus(e.message, false));
+  }
+
+  // ---- 变换 ----
+  function applyFlip(h: boolean, v: boolean) {
+    if (!work) return;
+    work = flipCanvas(work, h, v);
+    resetSel();
+    render();
+  }
+  function applyRotate(deg: number) {
+    if (!work) return;
+    work = rotateCanvas(work, deg);
+    resetSel();
+    render();
+  }
+  function applyCrop() {
+    if (!work) return;
+    work = cropCanvas(work, sel.x, sel.y, sel.w, sel.h);
+    resetSel();
+    render();
+    setStatus('已裁剪');
+  }
+  function resetAll() {
+    if (!original) return;
+    work = cloneCanvas(original);
+    resetSel();
+    render();
+    setStatus('已恢复原始图片');
+  }
+
+  // ---- 选框拖拽 ----
+  selEl.addEventListener('pointerdown', (e) => {
+    if (e.target === handle) return; // 手柄单独处理
+    drag = 'move';
+    startPX = e.clientX;
+    startPY = e.clientY;
+    startSel = { ...sel };
+    selEl.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  handle.addEventListener('pointerdown', (e) => {
+    drag = 'resize';
+    startPX = e.clientX;
+    startPY = e.clientY;
+    startSel = { ...sel };
+    handle.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+    e.preventDefault();
+  });
+  function onPointerMove(e: PointerEvent) {
+    if (!drag || !work) return;
+    const s = dispScale();
+    const dx = (e.clientX - startPX) / s;
+    const dy = (e.clientY - startPY) / s;
+    if (drag === 'move') {
+      sel.x = clamp(startSel.x + dx, 0, work.width - sel.w);
+      sel.y = clamp(startSel.y + dy, 0, work.height - sel.h);
+    } else {
+      sel.w = clamp(startSel.w + dx, 1, work.width - sel.x);
+      sel.h = clamp(startSel.h + dy, 1, work.height - sel.y);
+    }
+    syncInputs();
+    updateOverlay();
+  }
+  function onPointerUp(e: PointerEvent) {
+    drag = null;
+    try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+  }
+  selEl.addEventListener('pointermove', onPointerMove);
+  handle.addEventListener('pointermove', onPointerMove);
+  selEl.addEventListener('pointerup', onPointerUp);
+  handle.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('resize', updateOverlay);
+
+  // ---- 数值微调 ----
+  function applyInputs() {
+    if (!work) return;
+    const x = clamp(Number(cx.value) || 0, 0, work.width);
+    const y = clamp(Number(cy.value) || 0, 0, work.height);
+    const w = clamp(Number(cw.value) || 1, 1, work.width - x);
+    const h = clamp(Number(ch.value) || 1, 1, work.height - y);
+    sel = { x, y, w, h };
+    syncInputs();
+    updateOverlay();
+  }
+  [cx, cy, cw, ch].forEach((el) => el.addEventListener('input', applyInputs));
+
+  // ---- 工具条 ----
+  workspace.querySelectorAll('[data-act]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const act = (btn as HTMLElement).dataset.act;
+      if (act === 'flip-h') applyFlip(true, false);
+      else if (act === 'flip-v') applyFlip(false, true);
+      else if (act === 'rot-90') applyRotate(90);
+      else if (act === 'rot-180') applyRotate(180);
+      else if (act === 'rot-270') applyRotate(270);
+      else if (act === 'apply-crop') applyCrop();
+      else if (act === 'reset-sel') resetSel();
+      else if (act === 'reset') resetAll();
+    });
+  });
+
+  // ---- 下载 ----
+  downloadBtn.addEventListener('click', () => {
+    if (!work) return;
+    preview.toBlob((b) => {
+      if (b) download(b, outName(originalName, 'image/png'));
+    }, 'image/png');
+  });
+
+  // ---- 拖拽上传 ----
+  ['dragover', 'dragenter'].forEach((ev) =>
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.add('border-brand-500', 'bg-brand-50/60');
+    })
+  );
+  ['dragleave', 'drop'].forEach((ev) =>
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.remove('border-brand-500', 'bg-brand-50/60');
+    })
+  );
+  drop.addEventListener('drop', (e) => {
+    const f = (e as DragEvent).dataTransfer?.files?.[0];
+    if (f) onFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files?.[0]) onFile(fileInput.files[0]);
+  });
+</script>

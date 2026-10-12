@@ -1,0 +1,51 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="Base64 编解码 · sw-tools"
+  description="Base64 编码与解码（UTF-8 安全），纯浏览器本地处理，不上传服务器。"
+  toolName="Base64 编解码"
+  inputPlaceholder="在此粘贴文本或 Base64…（自动识别方向，失去焦点后转换）"
+  outputLabel="输出"
+  downloadName="result"
+  downloadExt="txt"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="encode">文本 → Base64</option>
+      <option value="decode">Base64 → 文本</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { encodeBase64, decodeBase64, looksLikeBase64 } from '../../lib/codec/base64';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE_TEXT = 'Hello, sw-tools! 你好，世界';
+
+  // 自动识别方向：看起来像 Base64 → 解码；否则编码
+  function detectDir(input: string): string {
+    return looksLikeBase64(input) ? 'decode' : 'encode';
+  }
+
+  setupConverter({
+    downloadName: 'result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const dir = (document.getElementById('direction') as HTMLSelectElement).value;
+      return dir === 'decode' ? decodeBase64(input) : encodeBase64(input);
+    },
+    getDirection: () => (document.getElementById('direction') as HTMLSelectElement).value,
+    detectDirection: detectDir,
+    directionLabels: { encode: '文本 → Base64', decode: 'Base64 → 文本' },
+    sampleFor: (dir) => (dir === 'decode' ? encodeBase64(SAMPLE_TEXT) : SAMPLE_TEXT),
+    sample: SAMPLE_TEXT,
+  });
+</script>

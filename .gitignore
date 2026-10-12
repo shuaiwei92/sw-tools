@@ -1,0 +1,44 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Build output
+dist
+.astro
+.output
+.cache
+
+# Cloudflare / Wrangler
+.wrangler
+.dev.vars
+wrangler.toml
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Test / coverage
+coverage
+
+# Local diagnostics (temporary)
+_diag.txt
+diag*.txt
+install*.txt

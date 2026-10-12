@@ -1,0 +1,77 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="时间戳转换 · sw-tools"
+  description="Unix 时间戳与日期互转（本地 / UTC），纯浏览器本地处理。"
+  toolName="时间戳转换"
+  inputPlaceholder="在此粘贴时间戳或日期…（自动识别方向，失去焦点后转换）"
+  outputLabel="结果"
+  downloadName="result"
+  downloadExt="txt"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="ts2date">时间戳 → 日期</option>
+      <option value="date2ts">日期 → 时间戳</option>
+    </select>
+  </label>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    单位
+    <select
+      id="unit"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="s">秒</option>
+      <option value="ms">毫秒</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { tsToText, dateToText, type TsUnit } from '../../lib/datetime/timestamp';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE_TS = '1634567890';
+  // 由示例时间戳推导本地日期字符串，保证两个方向的示例互相对应（不受时区影响）
+  const _d = new Date(Number(SAMPLE_TS) * 1000);
+  const _pad = (x: number) => String(x).padStart(2, '0');
+  const SAMPLE_DATE = `${_d.getFullYear()}-${_pad(_d.getMonth() + 1)}-${_pad(_d.getDate())} ${_pad(
+    _d.getHours()
+  )}:${_pad(_d.getMinutes())}:${_pad(_d.getSeconds())}`;
+
+  // 自动识别方向：纯数字 9~13 位视为时间戳；否则视为日期
+  function detectDir(input: string): string {
+    const t = input.trim();
+    if (!t) return 'ts2date';
+    if (/^\d{9,13}$/.test(t)) return 'ts2date';
+    return 'date2ts';
+  }
+
+  setupConverter({
+    downloadName: 'result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const dir = (document.getElementById('direction') as HTMLSelectElement).value;
+      if (dir === 'date2ts') return dateToText(input);
+      const unit = (document.getElementById('unit') as HTMLSelectElement).value as TsUnit;
+      return tsToText(input, unit);
+    },
+    getDirection: () => (document.getElementById('direction') as HTMLSelectElement).value,
+    detectDirection: detectDir,
+    directionLabels: { ts2date: '时间戳 → 日期', date2ts: '日期 → 时间戳' },
+    sampleFor: (dir) => (dir === 'date2ts' ? SAMPLE_DATE : SAMPLE_TS),
+    sample: SAMPLE_TS,
+  });
+
+  // 单位切换时立即重算（方向切换已由框架处理）
+  document.getElementById('unit')?.addEventListener('change', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>
