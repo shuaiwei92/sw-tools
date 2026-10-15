@@ -1,0 +1,114 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="JS / CSS / HTML 格式化压缩 · sw-tools"
+  description="JavaScript / CSS / HTML 一键美化或压缩：格式化基于 js-beautify，压缩为尊重字符串与注释的语义安全扫描器。"
+  toolName="代码格式化 / 压缩"
+  inputPlaceholder="在此粘贴 JS / CSS / HTML 代码…（失去焦点后自动处理，Ctrl+Enter 立即执行）"
+  outputLabel="结果"
+  downloadName="result"
+  downloadExt="js"
+  categoryHref="/#code"
+  categoryName="代码工具"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    语言
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="js">JavaScript</option>
+      <option value="css">CSS</option>
+      <option value="html">HTML</option>
+    </select>
+  </label>
+  <label slot="input-tools" class="flex items-center gap-1 text-xs text-slate-500">
+    操作
+    <select
+      id="op"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="format">格式化</option>
+      <option value="minify">压缩</option>
+    </select>
+  </label>
+  <label slot="input-tools" class="flex items-center gap-1 text-xs text-slate-500" id="indent-wrap">
+    缩进
+    <select
+      id="indent"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="2">2 空格</option>
+      <option value="4">4 空格</option>
+      <option value="tab">Tab</option>
+    </select>
+  </label>
+  <span slot="input-tools" class="ml-auto text-xs text-slate-400" id="stats-chip"></span>
+</Converter>
+
+<script>
+  import { formatCode, minifyCode, codeStats, type FormatLang } from '../../lib/code/format';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLES: Record<FormatLang, string> = {
+    js: `// 计算数组平均值（含示例）
+function avg(list){let s=0;for(const x of list){s+=x}
+return list.length?s/list.length:0}
+const data=[1,2,3,4,5];
+console.log('avg =',avg(data));`,
+    css: `.btn{display:inline-flex;padding:.5rem 1rem;border-radius:.5rem;background:#4f46e5;color:#fff}
+.btn:hover{background:#4338ca}
+.card   >   .title{font-weight:600;font-size:1.125rem}`,
+    html: `<div class="card"><h2   class="title">标题</h2><ul><li>项目一</li><li>项目二</li>
+<!-- 注释 --></ul></div>`,
+  };
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const langSel = $<HTMLSelectElement>('direction');
+  const opSel = $<HTMLSelectElement>('op');
+  const indentSel = $<HTMLSelectElement>('indent');
+  const statsChip = $('stats-chip');
+
+  const fmtSize = (bytes: number) => (bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`);
+
+  function updateStats(input: string, output: string) {
+    const a = codeStats(input);
+    const b = codeStats(output);
+    if (!b.bytes) {
+      statsChip.textContent = '';
+      return;
+    }
+    const delta = a.bytes - b.bytes;
+    const pct = a.bytes ? Math.round((delta / a.bytes) * 100) : 0;
+    statsChip.textContent = `${fmtSize(a.bytes)} → ${fmtSize(b.bytes)}${delta > 0 ? `（↓${pct}%）` : delta < 0 ? '（↑）' : ''}`;
+    statsChip.title = `输入 ${a.lines} 行 / ${a.chars} 字符 → 输出 ${b.lines} 行 / ${b.chars} 字符`;
+  }
+
+  setupConverter({
+    downloadName: 'result',
+    downloadExt: 'js',
+    getDownloadExt: () => langSel.value,
+    getDirection: () => langSel.value,
+    directionLabels: { js: 'JavaScript', css: 'CSS', html: 'HTML' },
+    sampleFor: (dir) => SAMPLES[dir as FormatLang] ?? SAMPLES.js,
+    sample: SAMPLES.js,
+    convert: (input) => {
+      const lang = langSel.value as FormatLang;
+      const indent = indentSel.value === 'tab' ? '\t' : Number(indentSel.value);
+      const out = opSel.value === 'minify' ? minifyCode(input, lang) : formatCode(input, lang, indent);
+      updateStats(input, out);
+      return out;
+    },
+  });
+
+  // 操作 / 缩进 / 语言切换：立即用当前输入重算
+  for (const el of [opSel, indentSel, langSel]) {
+    el.addEventListener('change', () => {
+      // 压缩时不展示缩进选项
+      $('indent-wrap').classList.toggle('hidden', opSel.value === 'minify');
+      $('input')?.dispatchEvent(new Event('blur'));
+    });
+  }
+</script>

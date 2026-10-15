@@ -1,0 +1,60 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="GBK / UTF-8 乱码转换 · sw-tools"
+  description="修复「UTF-8 文件被 GBK 软件打开」的乱码，或模拟该乱码效果；也可把正常文本按 GBK 解读，全程本地转换。"
+  toolName="GBK / UTF-8 乱码转换"
+  inputPlaceholder="在此粘贴乱码或正常文本…（失去焦点后自动处理，Ctrl+Enter 立即执行）"
+  outputLabel="输出"
+  downloadName="result"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动识别</option>
+      <option value="fix">乱码 → 正常文本</option>
+      <option value="make">正常文本 → 乱码效果</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { gbkSupported, utf8TextToGbkText, gbkTextToUtf8, fixMojibake } from '../../lib/codec/gbk';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  // 示例：UTF-8 字节被 GBK 解读后的经典乱码
+  const SAMPLE_MOJIBAKE = '涓浗浣犲ソ锛屼笘鐣岋紒'; // 中国你好，世界！
+  const SAMPLE_NORMAL = '中国你好，世界！';
+
+  const dirEl = document.getElementById('direction') as HTMLSelectElement;
+
+  /** 自动识别：能恢复成正常文本 → fix；否则 → make */
+  function detectDir(input: string): string {
+    if (!gbkSupported()) return 'fix';
+    return fixMojibake(input).recovered ? 'fix' : 'make';
+  }
+
+  setupConverter({
+    downloadName: 'result',
+    downloadExt: 'txt',
+    getDirection: () => dirEl.value,
+    detectDirection: detectDir,
+    directionLabels: { auto: '自动识别', fix: '乱码 → 正常文本', make: '正常文本 → 乱码效果' },
+    sampleFor: (dir) => (dir === 'make' ? SAMPLE_NORMAL : SAMPLE_MOJIBAKE),
+    sample: SAMPLE_MOJIBAKE,
+    convert: (input) => {
+      if (!gbkSupported()) throw new Error('当前浏览器不支持 GBK 编解码（需要 TextDecoder("gbk")，Chrome / Edge / Firefox / Safari 16.4+ 均可）');
+      // auto 已在 convertNow 中被改写为具体方向，这里再兜底一次
+      const dir = dirEl.value === 'auto' ? detectDir(input) : dirEl.value;
+      return dir === 'make' ? utf8TextToGbkText(input) : gbkTextToUtf8(input);
+    },
+  });
+</script>

@@ -1,0 +1,165 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="Markdown 编辑器 · sw-tools"
+  toolName="Markdown 编辑器"
+  description="Markdown 实时预览渲染（GFM）、HTML 反向转 Markdown，纯浏览器本地处理。"
+  categoryHref="/#convert"
+  categoryName="格式转换"
+  inputLabel="Markdown 源文"
+  outputLabel="预览 / HTML"
+  columns="even"
+>
+  <div slot="input-tools" class="flex items-center gap-1.5" id="md-tabs">
+    <button class="rounded-md bg-brand-600 px-2 py-0.5 text-xs text-white" data-mode="edit">编辑</button>
+    <button class="rounded-md px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800" data-mode="html">查看 HTML</button>
+    <button class="rounded-md px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800" data-mode="reverse">HTML → MD</button>
+  </div>
+  <button slot="input-tools" id="md-sample" class="tool-btn tool-btn-sm ml-2" title="载入示例文档">示例</button>
+  <button slot="input-tools" id="md-clear" class="tool-btn tool-btn-sm" title="清空">清空</button>
+
+  <textarea
+    slot="input"
+    id="md-src"
+    class="min-h-[14rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+    spellcheck="false"
+    placeholder="在此输入 Markdown…（支持 GFM 表格 / 任务列表 / 删除线）"
+  ></textarea>
+
+  <button slot="output-tools" id="md-copy-html" class="tool-btn tool-btn-sm" title="复制 HTML">复制 HTML</button>
+  <button slot="output-tools" id="md-copy-md" class="tool-btn tool-btn-sm" title="复制 Markdown">复制 MD</button>
+  <button slot="output-tools" id="md-download" class="tool-btn tool-btn-sm" title="下载 HTML 文件">下载 HTML</button>
+
+  <div slot="output" class="min-h-0 flex-1 overflow-y-auto">
+    <div id="md-preview" class="markdown-body p-4 text-sm leading-relaxed"></div>
+    <textarea
+      id="md-html-out"
+      readonly
+      class="hidden min-h-full w-full resize-none bg-transparent p-4 font-mono text-xs leading-relaxed outline-none"
+      spellcheck="false"
+    ></textarea>
+  </div>
+</Tool>
+
+<script>
+  import { htmlToMd, mdToHtml } from '../../lib/convert/markdown';
+
+  const SAMPLE = `# Markdown 编辑器
+
+支持 **GFM** 语法：*斜体*、~~删除线~~、\`行内代码\`。
+
+## 表格
+
+| 工具 | 状态 |
+| --- | --- |
+| JSON 格式化 | ✅ |
+| Cron 生成器 | ✅ |
+
+## 任务列表
+
+- [x] 实时预览
+- [x] HTML 反向转换
+- [ ] 导出 PDF
+
+## 代码块
+
+\`\`\`js
+const hello = 'world';
+console.log(hello);
+\`\`\`
+
+> 引用：所有渲染均在浏览器本地完成，内容不上传。
+
+[访问 sw-tools](https://example.com)
+`;
+
+  const src = document.getElementById('md-src') as HTMLTextAreaElement;
+  const preview = document.getElementById('md-preview')!;
+  const htmlOut = document.getElementById('md-html-out') as HTMLTextAreaElement;
+  const tabs = document.querySelectorAll('#md-tabs button');
+  let mode = 'edit';
+
+  function setMode(m: string) {
+    mode = m;
+    tabs.forEach((b) => {
+      const active = (b as HTMLElement).dataset.mode === m;
+      b.className = `rounded-md px-2 py-0.5 text-xs transition ${
+        active ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+      }`;
+    });
+    render();
+  }
+
+  function render() {
+    const text = src.value;
+    if (mode === 'reverse') {
+      // HTML → MD：源文本视为 HTML，输出显示为 MD 文本
+      const md = htmlToMd(text);
+      preview.classList.add('hidden');
+      htmlOut.classList.remove('hidden');
+      htmlOut.value = md;
+      return;
+    }
+    const html = mdToHtml(text);
+    htmlOut.value = html;
+    if (mode === 'html') {
+      preview.classList.add('hidden');
+      htmlOut.classList.remove('hidden');
+    } else {
+      htmlOut.classList.add('hidden');
+      preview.classList.remove('hidden');
+      preview.innerHTML = html;
+    }
+  }
+
+  tabs.forEach((b) => b.addEventListener('click', () => setMode((b as HTMLElement).dataset.mode!)));
+  src.addEventListener('input', render);
+
+  document.getElementById('md-sample')!.addEventListener('click', () => {
+    src.value = SAMPLE;
+    setMode('edit');
+  });
+  document.getElementById('md-clear')!.addEventListener('click', () => {
+    src.value = '';
+    render();
+  });
+  document.getElementById('md-copy-html')!.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(htmlOut.value);
+    flash('md-copy-html', '已复制');
+  });
+  document.getElementById('md-copy-md')!.addEventListener('click', async () => {
+    const text = mode === 'reverse' ? htmlOut.value : src.value;
+    await navigator.clipboard.writeText(text);
+    flash('md-copy-md', '已复制');
+  });
+  document.getElementById('md-download')!.addEventListener('click', () => {
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><title>Markdown 导出</title>
+<style>body{max-width:46rem;margin:2rem auto;padding:0 1rem;font-family:system-ui,sans-serif;line-height:1.7}
+table{border-collapse:collapse}th,td{border:1px solid #ddd;padding:.4rem .8rem}
+pre{background:#f4f4f5;padding:1rem;border-radius:.5rem;overflow:auto}code{font-family:ui-monospace,monospace}
+blockquote{border-left:4px solid #d4d4d8;margin:0;padding-left:1rem;color:#52525b}</style>
+</head>
+<body>${mdToHtml(src.value)}</body>
+</html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'markdown.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function flash(id: string, text: string) {
+    const btn = document.getElementById(id) as HTMLButtonElement;
+    const old = btn.textContent;
+    btn.textContent = text;
+    setTimeout(() => (btn.textContent = old), 1200);
+  }
+
+  src.value = SAMPLE;
+  render();
+</script>

@@ -1,0 +1,88 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="简繁体 / 拼音转换 · sw-tools"
+  toolName="简繁体 / 拼音转换"
+  description="简体 ↔ 繁体（台湾 / 香港地区用字）、汉字转拼音（带声调 / 无声调 / 首字母），纯本地词典。"
+  categoryHref="/#text"
+  categoryName="文本处理"
+  inputLabel="输入文本"
+  outputLabel="转换结果"
+  columns="even"
+>
+  <div slot="input-tools" class="flex items-center gap-1.5" id="zh-tabs">
+    <button class="rounded-md bg-brand-600 px-2 py-0.5 text-xs text-white" data-mode="s2t">简 → 繁（台湾）</button>
+    <button class="rounded-md px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800" data-mode="t2s">繁 → 简</button>
+    <button class="rounded-md px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800" data-mode="s2hk">简 → 繁（香港）</button>
+    <button class="rounded-md px-2 py-0.5 text-xs text-slate-500 transition hover:bg-slate-100 dark:hover:bg-slate-800" data-mode="pinyin">拼音</button>
+  </div>
+
+  <textarea
+    slot="input"
+    id="zh-src"
+    class="min-h-[14rem] w-full flex-1 resize-none bg-slate-50 p-3 text-sm leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+    spellcheck="false"
+    placeholder="输入中文文本…"
+  >汉字拼音转换，支持简繁体互转。</textarea>
+
+  <label slot="output-tools" class="flex items-center gap-1 text-xs text-slate-500" id="py-opts">
+    拼音样式
+    <select
+      id="py-style"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="symbol">带声调（hàn yǔ）</option>
+      <option value="num">数字声调（han4 yu3）</option>
+      <option value="none">无声调（han yu）</option>
+      <option value="first">首字母（h y）</option>
+    </select>
+  </label>
+  <button slot="output-tools" id="zh-copy" class="tool-btn tool-btn-sm" title="复制结果">复制</button>
+
+  <div slot="output" class="min-h-0 flex-1 overflow-y-auto p-3">
+    <div id="zh-out" class="whitespace-pre-wrap break-all text-base leading-loose text-slate-700 dark:text-slate-200"></div>
+  </div>
+</Tool>
+
+<script>
+  import { convertChinese, toPinyin, type ConvertDir, type PinyinStyle } from '../../lib/text/zhConvert';
+
+  const src = document.getElementById('zh-src') as HTMLTextAreaElement;
+  const out = document.getElementById('zh-out')!;
+  const pyOpts = document.getElementById('py-opts')!;
+  const pyStyle = document.getElementById('py-style') as HTMLSelectElement;
+  const tabs = document.querySelectorAll('#zh-tabs button');
+  let mode: ConvertDir | 'pinyin' = 's2t';
+
+  function setMode(m: string) {
+    mode = m as ConvertDir | 'pinyin';
+    tabs.forEach((b) => {
+      const active = (b as HTMLElement).dataset.mode === m;
+      b.className = `rounded-md px-2 py-0.5 text-xs transition ${
+        active ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+      }`;
+    });
+    pyOpts.classList.toggle('hidden', m !== 'pinyin');
+    render();
+  }
+
+  function render() {
+    const text = src.value;
+    out.textContent = mode === 'pinyin' ? toPinyin(text, pyStyle.value as PinyinStyle) : convertChinese(text, mode);
+  }
+
+  tabs.forEach((b) => b.addEventListener('click', () => setMode((b as HTMLElement).dataset.mode!)));
+  src.addEventListener('input', render);
+  pyStyle.addEventListener('change', render);
+
+  document.getElementById('zh-copy')!.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(out.textContent ?? '');
+    const btn = document.getElementById('zh-copy') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制'), 1200);
+  });
+
+  setMode('s2t');
+</script>

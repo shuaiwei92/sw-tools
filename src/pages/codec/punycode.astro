@@ -1,0 +1,51 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="Punycode 转换 · sw-tools"
+  description="中文域名与 xn-- 形式互转（IDN / RFC 3492），自动 NFC 规范化，纯浏览器本地处理。"
+  toolName="Punycode 转换"
+  inputPlaceholder="在此粘贴域名（如 中文.com 或 xn--fiq228c.com）…（自动识别方向，失去焦点后转换）"
+  outputLabel="输出"
+  downloadName="punycode-result"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="encode">中文域名 → xn--</option>
+      <option value="decode">xn-- → 中文域名</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { encodeDomain, decodeDomain } from '../../lib/codec/punycode';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = '中文域名.com';
+
+  const dirEl = () => document.getElementById('direction') as HTMLSelectElement;
+  const detect = (input: string) =>
+    /xn--/i.test(input) ? 'decode' : /[^\x00-\x7f]/.test(input) ? 'encode' : 'encode';
+
+  setupConverter({
+    downloadName: 'punycode-result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const dir = dirEl().value === 'auto' ? detect(input) : dirEl().value;
+      return dir === 'decode' ? decodeDomain(input) : encodeDomain(input);
+    },
+    getDirection: () => dirEl().value,
+    detectDirection: detect,
+    directionLabels: { encode: '中文域名 → xn--', decode: 'xn-- → 中文域名' },
+    sample: SAMPLE,
+  });
+</script>

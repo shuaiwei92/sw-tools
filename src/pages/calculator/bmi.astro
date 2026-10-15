@@ -1,0 +1,161 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="BMI 计算器 · sw-tools"
+  toolName="BMI 计算器"
+  description="体质指数（BMI）、体型分类与健康体重范围（采用国内通用标准 18.5 / 24 / 28），纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="身体数据"
+  outputLabel="体型分类"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-4 p-3">
+    <div>
+      <label class="calc-label" for="bmi-w">体重（kg）</label>
+      <input id="bmi-w" type="number" class="calc-input" value="65" />
+    </div>
+    <div>
+      <label class="calc-label" for="bmi-h">身高（cm）</label>
+      <input id="bmi-h" type="number" class="calc-input" value="170" />
+    </div>
+    <div class="result-card">
+      <div class="text-xs text-slate-500 dark:text-slate-400">BMI 指数</div>
+      <div class="mt-1 flex items-baseline gap-3">
+        <span id="bmi-value" class="text-3xl font-bold text-brand-600 dark:text-brand-300">—</span>
+        <span id="bmi-cat" class="text-sm font-semibold text-slate-500 dark:text-slate-400"></span>
+      </div>
+      <div id="bmi-range" class="mt-2 text-sm text-slate-500 dark:text-slate-400"></div>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-6 p-3">
+    <h2 class="shrink-0 text-sm font-semibold text-slate-600 dark:text-slate-300">体型分类</h2>
+
+    <div class="flex min-h-0 flex-1 flex-col justify-center gap-7">
+      <!-- 统一刻度轴：四色分段 + 指针气泡 + 边界刻度 -->
+      <div class="relative px-1 pt-11 pb-7">
+        <!-- 当前 BMI 指针 -->
+        <div
+          id="bmi-marker"
+          class="pointer-events-none absolute top-0 flex -translate-x-1/2 flex-col items-center transition-all duration-200"
+          style="left:50%"
+        >
+          <span id="bmi-marker-val" class="rounded-full bg-brand-600 px-2.5 py-1 text-sm font-bold text-white shadow-md">—</span>
+          <span class="h-0 w-0 border-x-[6px] border-t-[7px] border-x-transparent border-t-brand-600"></span>
+        </div>
+        <!-- 分段条（宽度按 0~40 区间占比，与 BANDS 对应） -->
+        <div class="flex h-12 w-full overflow-hidden rounded-xl">
+          <div class="band flex items-center justify-center bg-sky-400 text-sm font-bold text-white" style="width:46.25%">偏瘦</div>
+          <div class="band flex items-center justify-center bg-emerald-500 text-sm font-bold text-white" style="width:13.75%">正常</div>
+          <div class="band flex items-center justify-center bg-amber-500 text-sm font-bold text-white" style="width:10%">超重</div>
+          <div class="band flex items-center justify-center bg-rose-500 text-sm font-bold text-white" style="width:30%">肥胖</div>
+        </div>
+        <!-- 边界刻度 -->
+        <div class="relative mt-2 h-5">
+          <span class="absolute -translate-x-1/2 text-xs text-slate-400" style="left:0%">0</span>
+          <span class="absolute -translate-x-1/2 text-xs font-medium text-slate-500 dark:text-slate-400" style="left:46.25%">18.5</span>
+          <span class="absolute -translate-x-1/2 text-xs font-medium text-slate-500 dark:text-slate-400" style="left:60%">24</span>
+          <span class="absolute -translate-x-1/2 text-xs font-medium text-slate-500 dark:text-slate-400" style="left:70%">28</span>
+          <span class="absolute -translate-x-1/2 text-xs text-slate-400" style="left:100%">40+</span>
+        </div>
+      </div>
+
+      <!-- 分类卡片：当前档高亮 -->
+      <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div class="band-card rounded-lg border border-slate-200 p-2 text-center dark:border-slate-700">
+          <div class="flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <span class="h-2.5 w-2.5 rounded-full bg-sky-400"></span>偏瘦
+          </div>
+          <div class="mt-0.5 text-xs text-slate-400">&lt; 18.5</div>
+        </div>
+        <div class="band-card rounded-lg border border-slate-200 p-2 text-center dark:border-slate-700">
+          <div class="flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>正常
+          </div>
+          <div class="mt-0.5 text-xs text-slate-400">18.5 ~ 24</div>
+        </div>
+        <div class="band-card rounded-lg border border-slate-200 p-2 text-center dark:border-slate-700">
+          <div class="flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>超重
+          </div>
+          <div class="mt-0.5 text-xs text-slate-400">24 ~ 28</div>
+        </div>
+        <div class="band-card rounded-lg border border-slate-200 p-2 text-center dark:border-slate-700">
+          <div class="flex items-center justify-center gap-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            <span class="h-2.5 w-2.5 rounded-full bg-rose-500"></span>肥胖
+          </div>
+          <div class="mt-0.5 text-xs text-slate-400">≥ 28</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="mt-auto shrink-0 text-[11px] leading-relaxed text-slate-400">
+      标准参考（成人）：偏瘦 &lt; 18.5，正常 18.5 ~ 24，超重 24 ~ 28，肥胖 ≥ 28。BMI 未区分肌肉与脂肪，仅作参考。
+    </p>
+  </div>
+</Tool>
+
+<script>
+  import { calcBMI } from '../../lib/calc/bmi';
+
+  const w = document.getElementById('bmi-w') as HTMLInputElement;
+  const h = document.getElementById('bmi-h') as HTMLInputElement;
+  const valueEl = document.getElementById('bmi-value') as HTMLDivElement;
+  const catEl = document.getElementById('bmi-cat') as HTMLSpanElement;
+  const rangeEl = document.getElementById('bmi-range') as HTMLDivElement;
+  const marker = document.getElementById('bmi-marker') as HTMLDivElement;
+  const markerVal = document.getElementById('bmi-marker-val') as HTMLSpanElement;
+  const bands = Array.from(document.querySelectorAll<HTMLDivElement>('.band'));
+  const cards = Array.from(document.querySelectorAll<HTMLDivElement>('.band-card'));
+
+  const BANDS = [
+    { label: '偏瘦', range: '< 18.5', min: 0, max: 18.5 },
+    { label: '正常', range: '18.5 ~ 24', min: 18.5, max: 24 },
+    { label: '超重', range: '24 ~ 28', min: 24, max: 28 },
+    { label: '肥胖', range: '≥ 28', min: 28, max: 40 },
+  ];
+
+  /** 更新指针位置与各分段 / 卡片的激活态 */
+  function renderChart(bmi: number) {
+    const pos = Math.min(100, Math.max(0, (bmi / 40) * 100));
+    marker.style.left = pos + '%';
+    markerVal.textContent = bmi.toFixed(1);
+    BANDS.forEach((b, i) => {
+      const active = bmi >= b.min && bmi < b.max;
+      bands[i].style.opacity = active ? '1' : '0.35';
+      bands[i].classList.toggle('ring-2', active);
+      bands[i].classList.toggle('ring-inset', active);
+      bands[i].classList.toggle('ring-white/70', active);
+      cards[i].classList.toggle('border-brand-500', active);
+      cards[i].classList.toggle('bg-brand-50', active);
+      cards[i].classList.toggle('dark:bg-brand-500/10', active);
+      cards[i].classList.toggle('border-slate-200', !active);
+      cards[i].classList.toggle('dark:border-slate-700', !active);
+    });
+  }
+
+  function compute() {
+    const W = parseFloat(w.value);
+    const H = parseFloat(h.value);
+    if (Number.isNaN(W) || Number.isNaN(H) || H <= 0) {
+      valueEl.textContent = '—';
+      catEl.textContent = '';
+      rangeEl.textContent = '';
+      return;
+    }
+    try {
+      const res = calcBMI(W, H);
+      valueEl.textContent = res.bmi.toFixed(1);
+      catEl.textContent = '· ' + res.category;
+      rangeEl.textContent = `该身高的健康体重范围约 ${res.healthyRangeText}`;
+      renderChart(res.bmi);
+    } catch (e) {
+      valueEl.textContent = '✗ ' + (e as Error).message;
+    }
+  }
+
+  [w, h].forEach((el) => el.addEventListener('input', compute));
+  compute();
+</script>

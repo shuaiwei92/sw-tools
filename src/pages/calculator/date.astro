@@ -1,0 +1,195 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="日期计算器 · sw-tools"
+  toolName="日期计算器"
+  description="日期天数差、日期加减、工作日统计与日期详情（农历 / 干支 / 生肖），纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="日期计算"
+  outputLabel="日期详情"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-3">
+    <!-- 天数差 -->
+    <section class="flex flex-col gap-3">
+      <h2 class="text-sm font-semibold text-slate-600 dark:text-slate-300">天数差</h2>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="calc-label" for="d1">起始日期</label>
+          <input id="d1" type="date" class="calc-input" />
+        </div>
+        <div>
+          <label class="calc-label" for="d2">结束日期</label>
+          <input id="d2" type="date" class="calc-input" />
+        </div>
+      </div>
+      <div class="result-card space-y-0">
+        <div class="kv"><span class="k">相隔天数</span><span class="v big" id="diff-days">—</span></div>
+        <div class="kv"><span class="k">工作日（周一至周五）</span><span class="v" id="diff-work">—</span></div>
+        <div class="kv"><span class="k">约为</span><span class="v" id="diff-weeks">—</span></div>
+      </div>
+    </section>
+
+    <!-- 日期加减 -->
+    <section class="flex flex-col gap-3">
+      <h2 class="text-sm font-semibold text-slate-600 dark:text-slate-300">日期加减</h2>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="calc-label" for="add-base">基准日期</label>
+          <input id="add-base" type="date" class="calc-input" />
+        </div>
+        <div>
+          <label class="calc-label" for="add-n">天数（可为负）</label>
+          <input id="add-n" type="number" class="calc-input" value="30" />
+        </div>
+      </div>
+      <div class="result-card space-y-0">
+        <div class="kv"><span class="k">结果日期</span><span class="v big" id="add-out">—</span></div>
+        <div class="kv"><span class="k">星期</span><span class="v" id="add-week">—</span></div>
+        <div class="kv"><span class="k">农历</span><span class="v" id="add-lunar">—</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div class="shrink-0">
+      <label class="calc-label" for="wd">查询日期</label>
+      <input id="wd" type="date" class="calc-input" />
+    </div>
+    <div class="result-card flex min-h-0 flex-1 flex-col">
+      <div class="text-xs text-slate-500 dark:text-slate-400">这一天是</div>
+      <div id="wd-week" class="mt-1 text-3xl font-bold text-brand-600 dark:text-brand-300">—</div>
+      <div id="wd-full" class="mt-1 text-sm text-slate-500 dark:text-slate-400">—</div>
+      <div id="wd-lunar" class="mt-2 text-lg font-semibold text-slate-700 dark:text-slate-200">—</div>
+      <div id="wd-rows" class="mt-3 flex flex-1 flex-col justify-center"></div>
+    </div>
+    <p class="shrink-0 text-xs leading-relaxed text-slate-400">
+      农历数据覆盖 1900 ~ 2100 年，全部本地计算、不调用在线接口；传统老黄历的「宜忌」需要逐日黄历数据库，暂不提供。
+    </p>
+  </div>
+</Tool>
+
+<script>
+  import { dateDifference, addToDate, dateToWeekday, formatDate } from '../../lib/calc/date';
+  import { solarToLunar, leapMonthLabel, zodiacSign } from '../../lib/calc/lunar';
+
+  const today = new Date();
+  const iso = formatDate(today);
+
+  const d1 = document.getElementById('d1') as HTMLInputElement;
+  const d2 = document.getElementById('d2') as HTMLInputElement;
+  const diffDays = document.getElementById('diff-days') as HTMLDivElement;
+  const diffWork = document.getElementById('diff-work') as HTMLDivElement;
+  const diffWeeks = document.getElementById('diff-weeks') as HTMLDivElement;
+
+  const addBase = document.getElementById('add-base') as HTMLInputElement;
+  const addN = document.getElementById('add-n') as HTMLInputElement;
+  const addOut = document.getElementById('add-out') as HTMLDivElement;
+  const addWeek = document.getElementById('add-week') as HTMLDivElement;
+  const addLunar = document.getElementById('add-lunar') as HTMLDivElement;
+
+  const wd = document.getElementById('wd') as HTMLInputElement;
+  const wdWeek = document.getElementById('wd-week') as HTMLDivElement;
+  const wdFull = document.getElementById('wd-full') as HTMLDivElement;
+  const wdLunar = document.getElementById('wd-lunar') as HTMLDivElement;
+  const wdRows = document.getElementById('wd-rows') as HTMLDivElement;
+
+  d1.value = iso;
+  d2.value = iso;
+  addBase.value = iso;
+  wd.value = iso;
+
+  const isLeapYear = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+  function computeDiff() {
+    if (!d1.value || !d2.value) {
+      diffDays.textContent = '—';
+      diffWork.textContent = '—';
+      diffWeeks.textContent = '—';
+      return;
+    }
+    try {
+      const r = dateDifference(d1.value, d2.value);
+      diffDays.textContent = r.days + ' 天';
+      diffWork.textContent = r.weekdays + ' 天';
+      diffWeeks.textContent = `${r.weeks} 周`;
+    } catch (e) {
+      diffDays.textContent = '✗ ' + (e as Error).message;
+    }
+  }
+
+  function computeAdd() {
+    if (!addBase.value) {
+      addOut.textContent = '—';
+      addWeek.textContent = '—';
+      addLunar.textContent = '—';
+      return;
+    }
+    const n = parseInt(addN.value) || 0;
+    try {
+      const r = addToDate(addBase.value, n);
+      addOut.textContent = r.text;
+      addWeek.textContent = r.weekday;
+      const lunar = solarToLunar(r.result.getFullYear(), r.result.getMonth() + 1, r.result.getDate());
+      addLunar.textContent = lunar ? `农历 ${lunar.text}` : '—';
+    } catch (e) {
+      addOut.textContent = '✗ ' + (e as Error).message;
+    }
+  }
+
+  function computeWd() {
+    if (!wd.value) {
+      wdWeek.textContent = '—';
+      wdFull.textContent = '—';
+      wdLunar.textContent = '—';
+      wdRows.innerHTML = '';
+      return;
+    }
+    try {
+      const [y, m, d] = wd.value.split('-').map(Number);
+      const r = dateToWeekday(wd.value);
+      wdWeek.textContent = r.weekday;
+      wdFull.textContent = `${y} 年 ${m} 月 ${d} 日`;
+
+      const lunar = solarToLunar(y, m, d);
+      wdLunar.textContent = lunar ? `农历 ${lunar.text}` : '（超出农历数据范围 1900 ~ 2100）';
+
+      const dt = new Date(y, m - 1, d);
+      const dayOfYear = Math.round((dt.getTime() - new Date(y, 0, 1).getTime()) / 86400000) + 1;
+      const leap = isLeapYear(y);
+      const yearDays = leap ? 366 : 365;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const relDays = Math.round((dt.getTime() - now.getTime()) / 86400000);
+      const rel = relDays === 0 ? '就是今天' : relDays > 0 ? `${relDays} 天后` : `${-relDays} 天前`;
+
+      const rows: [string, string][] = [
+        ['今年第几天', `第 ${dayOfYear} 天 · 全年剩余 ${yearDays - dayOfYear} 天`],
+        ['第几周', `第 ${r.weekNo} 周（周一为一周起点）`],
+        ['距今天', rel],
+        ['公历闰年', leap ? '是（全年 366 天）' : '否（全年 365 天）'],
+        ['星座', zodiacSign(m, d)],
+      ];
+      if (lunar) {
+        rows.splice(3, 0, ['农历月份', lunar.monthName]);
+        rows.splice(4, 0, ['干支年 · 生肖', `${lunar.ganzhiYear}年 · 属${lunar.zodiac}`]);
+        const lm = leapMonthLabel(lunar.year);
+        if (lm) rows.splice(5, 0, ['农历年闰月', `${lunar.year} 年（${lm}）`]);
+      }
+      wdRows.innerHTML = rows
+        .map(([k, v]) => `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`)
+        .join('');
+    } catch (e) {
+      wdWeek.textContent = '✗ ' + (e as Error).message;
+    }
+  }
+
+  [d1, d2].forEach((el) => el.addEventListener('input', computeDiff));
+  [addBase, addN].forEach((el) => el.addEventListener('input', computeAdd));
+  wd.addEventListener('input', computeWd);
+  computeDiff();
+  computeAdd();
+  computeWd();
+</script>

@@ -1,0 +1,293 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+const SIZE_PRESETS: { label: string; w: number; h: number }[] = [
+  { label: '300×250', w: 300, h: 250 },
+  { label: '600×400', w: 600, h: 400 },
+  { label: '800×600', w: 800, h: 600 },
+  { label: '1200×630 OG', w: 1200, h: 630 },
+  { label: '1920×1080', w: 1920, h: 1080 },
+  { label: '500×500', w: 500, h: 500 },
+  { label: '320×480', w: 320, h: 480 },
+];
+
+const PATTERNS: { id: 'solid' | 'grid' | 'dots' | 'diagonal' | 'cross'; label: string }[] = [
+  { id: 'solid', label: '纯色' },
+  { id: 'grid', label: '网格' },
+  { id: 'dots', label: '圆点' },
+  { id: 'diagonal', label: '斜线' },
+  { id: 'cross', label: '十字' },
+];
+
+const FONTS = [
+  { value: 'sans-serif', label: 'sans-serif（默认）' },
+  { value: 'serif', label: 'serif（衬线）' },
+  { value: 'monospace', label: 'monospace（等宽）' },
+  { value: "'PingFang SC', 'Microsoft YaHei', sans-serif", label: '系统中文字体' },
+];
+---
+
+<Tool
+  title="占位图生成器 · sw-tools"
+  toolName="占位图生成器"
+  description="生成 SVG 占位图：自定义尺寸、配色、文字与网格 / 圆点 / 斜线图案，可下载 SVG 或导出 PNG，直接复制 img 标签或 CSS 引用。"
+  categoryHref="/#generator"
+  categoryName="生成器"
+  inputLabel="参数配置"
+  outputLabel="预览与导出"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 尺寸 -->
+    <div>
+      <span class="calc-label">尺寸</span>
+      <div class="flex gap-2">
+        <input id="in-w" type="number" min="1" max="4096" class="calc-input text-sm" value="800" />
+        <span class="self-center text-slate-400">×</span>
+        <input id="in-h" type="number" min="1" max="4096" class="calc-input text-sm" value="600" />
+      </div>
+      <div class="mt-1.5 flex flex-wrap gap-1.5">
+        {SIZE_PRESETS.map((p) => (
+          <button class="preset-chip" data-w={p.w} data-h={p.h}>{p.label}</button>
+        ))}
+      </div>
+    </div>
+
+    <!-- 配色 -->
+    <div class="space-y-2">
+      <div class="flex items-end gap-2">
+        <div>
+          <label class="calc-label" for="bg-color">背景色</label>
+          <input id="bg-color" type="color" value="#e2e8f0" class="h-9 w-14 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <label class="calc-label" for="bg-text">背景色值</label>
+          <input id="bg-text" type="text" spellcheck="false" class="calc-input font-mono text-xs" value="#e2e8f0" />
+        </div>
+      </div>
+      <div class="flex items-end gap-2">
+        <div>
+          <label class="calc-label" for="fg-color">文字 / 图案色</label>
+          <input id="fg-color" type="color" value="#64748b" class="h-9 w-14 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <label class="calc-label" for="fg-text">文字色值</label>
+          <input id="fg-text" type="text" spellcheck="false" class="calc-input font-mono text-xs" value="#64748b" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 文字 -->
+    <div class="space-y-2">
+      <div>
+        <label class="calc-label" for="in-text">文字（留空自动显示 宽×高）</label>
+        <input id="in-text" type="text" class="calc-input text-sm" placeholder="800×600" />
+      </div>
+      <div class="flex gap-2">
+        <div class="flex-1">
+          <label class="calc-label" for="in-fontsize">字号（0 = 自动）</label>
+          <input id="in-fontsize" type="number" min="0" class="calc-input text-sm" value="0" />
+        </div>
+        <div class="flex-1">
+          <label class="calc-label" for="in-font">字体</label>
+          <select id="in-font" class="calc-input text-sm">
+            {FONTS.map((f) => <option value={f.value}>{f.label}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- 图案 -->
+    <div>
+      <span class="calc-label">图案</span>
+      <div class="seg flex-wrap" id="pattern-seg">
+        {PATTERNS.map((p) => (
+          <button data-pattern={p.id} class={p.id === 'grid' ? 'active' : ''}>{p.label}</button>
+        ))}
+      </div>
+      <div class="mt-2">
+        <span class="calc-label flex justify-between">
+          <span>图案不透明度</span>
+          <span class="font-mono text-slate-400" id="op-val">25%</span>
+        </span>
+        <input id="sl-opacity" type="range" min="0" max="100" value="25" class="w-full accent-brand-600" />
+      </div>
+    </div>
+
+    <!-- 圆角与边框 -->
+    <div class="grid grid-cols-2 gap-2">
+      <div>
+        <label class="calc-label" for="in-radius">圆角</label>
+        <input id="in-radius" type="number" min="0" class="calc-input text-sm" value="0" />
+      </div>
+      <div>
+        <label class="calc-label" for="in-border">边框宽度</label>
+        <input id="in-border" type="number" min="0" class="calc-input text-sm" value="0" />
+      </div>
+    </div>
+    <div class="flex items-end gap-2">
+      <div>
+        <label class="calc-label" for="bc-color">边框色</label>
+        <input id="bc-color" type="color" value="#94a3b8" class="h-9 w-14 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" />
+      </div>
+      <div class="min-w-0 flex-1">
+        <label class="calc-label" for="bc-text">边框色值</label>
+        <input id="bc-text" type="text" spellcheck="false" class="calc-input font-mono text-xs" value="#94a3b8" />
+      </div>
+    </div>
+  </div>
+
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="ph-status"></span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy-tag" title="复制 img 标签"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 预览 -->
+    <div class="flex min-h-40 flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900" id="ph-stage">
+      <img id="preview-img" alt="占位图预览" class="max-h-full max-w-full rounded" />
+    </div>
+
+    <!-- 导出 -->
+    <div class="flex flex-wrap gap-2">
+      <button class="btn-primary tool-btn-sm" id="btn-dl-svg"><Icon name="download" /><span>下载 SVG</span></button>
+      <button class="tool-btn tool-btn-sm" id="btn-dl-png"><Icon name="download" /><span>下载 PNG</span></button>
+      <button class="tool-btn tool-btn-sm" id="btn-copy-css" title="复制 CSS background 引用"><Icon name="copy" /><span>复制 CSS</span></button>
+    </div>
+
+    <!-- 代码 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">img 标签</span>
+      <pre id="tag-out" class="mt-1 max-h-32 overflow-auto rounded-lg bg-slate-50 p-2 font-mono text-[0.6875rem] leading-relaxed break-all text-slate-700 dark:bg-slate-900 dark:text-slate-200"></pre>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { buildPlaceholderSvg, svgDataUrl, DEFAULT_PLACEHOLDER, type PlaceholderOptions, type PlaceholderPattern } from '../../lib/generator/placeholder';
+
+  const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+  const val = (id: string): string => (document.getElementById(id) as HTMLInputElement).value;
+  const numVal = (id: string): number => Number((document.getElementById(id) as HTMLInputElement).value) || 0;
+
+  const state: PlaceholderOptions = { ...DEFAULT_PLACEHOLDER };
+  let svg = '';
+
+  function render(): void {
+    svg = buildPlaceholderSvg(state);
+    const url = svgDataUrl(svg);
+    ($('preview-img') as HTMLImageElement).src = url;
+    $('tag-out').textContent = `<img\n  src="${url}"\n  width="${state.width}"\n  height="${state.height}"\n  alt="placeholder ${state.width}x${state.height}"\n/>`;
+    $('ph-status').textContent = `${state.width}×${state.height} · ${svg.length} 字符`;
+  }
+
+  function bindColorPair(colorId: string, textId: string, key: 'bg' | 'fg' | 'borderColor'): void {
+    const colorInput = document.getElementById(colorId) as HTMLInputElement;
+    const textInput = document.getElementById(textId) as HTMLInputElement;
+    colorInput.addEventListener('input', () => {
+      textInput.value = colorInput.value;
+      state[key] = colorInput.value;
+      render();
+    });
+    textInput.addEventListener('input', () => {
+      state[key] = textInput.value.trim();
+      if (/^#[0-9a-f]{6}$/i.test(state[key])) colorInput.value = state[key];
+      render();
+    });
+  }
+  bindColorPair('bg-color', 'bg-text', 'bg');
+  bindColorPair('fg-color', 'fg-text', 'fg');
+  bindColorPair('bc-color', 'bc-text', 'borderColor');
+
+  for (const id of ['in-w', 'in-h', 'in-fontsize', 'in-radius', 'in-border'] as const) {
+    document.getElementById(id)!.addEventListener('input', () => {
+      if (id === 'in-w') state.width = numVal('in-w');
+      if (id === 'in-h') state.height = numVal('in-h');
+      if (id === 'in-fontsize') state.fontSize = numVal('in-fontsize');
+      if (id === 'in-radius') state.radius = numVal('in-radius');
+      if (id === 'in-border') state.borderWidth = numVal('in-border');
+      render();
+    });
+  }
+  document.getElementById('in-text')!.addEventListener('input', () => {
+    state.text = val('in-text');
+    render();
+  });
+  document.getElementById('in-font')!.addEventListener('change', () => {
+    state.fontFamily = val('in-font');
+    render();
+  });
+
+  // 尺寸预设
+  document.querySelectorAll<HTMLButtonElement>('[data-w][data-h]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.width = Number(btn.dataset.w);
+      state.height = Number(btn.dataset.h);
+      (document.getElementById('in-w') as HTMLInputElement).value = String(state.width);
+      (document.getElementById('in-h') as HTMLInputElement).value = String(state.height);
+      render();
+    });
+  });
+
+  // 图案
+  document.querySelectorAll<HTMLButtonElement>('#pattern-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.pattern = btn.dataset.pattern as PlaceholderPattern;
+      document.querySelectorAll('#pattern-seg button').forEach((b) => b.classList.toggle('active', b === btn));
+      render();
+    });
+  });
+  document.getElementById('sl-opacity')!.addEventListener('input', (e) => {
+    const v = Number((e.target as HTMLInputElement).value);
+    state.patternOpacity = v / 100;
+    $('op-val').textContent = `${v}%`;
+    render();
+  });
+
+  // 下载
+  function download(url: string, name: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+  }
+  $('btn-dl-svg').addEventListener('click', () => {
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    download(URL.createObjectURL(blob), `placeholder-${state.width}x${state.height}.svg`);
+  });
+  $('btn-dl-png').addEventListener('click', () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = state.width;
+      canvas.height = state.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((blob) => {
+        if (blob) download(URL.createObjectURL(blob), `placeholder-${state.width}x${state.height}.png`);
+      }, 'image/png');
+    };
+    img.src = svgDataUrl(svg);
+  });
+
+  // 复制
+  $('btn-copy-tag').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('tag-out').textContent ?? '');
+    } catch {
+      /* 忽略 */
+    }
+  });
+  $('btn-copy-css').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(`background-image: url("${svgDataUrl(svg)}");`);
+      $('ph-status').textContent = '已复制 CSS 引用';
+    } catch {
+      /* 忽略 */
+    }
+  });
+
+  render();
+</script>

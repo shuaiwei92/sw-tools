@@ -24,7 +24,7 @@ import Converter from '../../layouts/Converter.astro';
 </Converter>
 
 <script>
-  import { jsonToCsv, csvToJson } from '../../lib/convert/jsonCsv';
+  import { jsonToCsv, parseCsv, csvToObjects } from '../../lib/data/csv';
   import { setupConverter } from '../../lib/convert/converter-ui';
 
   const SAMPLE_JSON = `[
@@ -36,6 +36,13 @@ import Converter from '../../layouts/Converter.astro';
 1,Alice,true
 2,Bob,false
 3,Cara,true`;
+
+  // 基于健壮库：支持 BOM 剥离、分隔符自动识别、引号转义与引号内换行
+  function csvToJson(input: string): string {
+    const { headers, rows } = parseCsv(input, { hasHeader: true });
+    if (!headers.length) throw new Error('未解析到表头行');
+    return JSON.stringify(csvToObjects(headers, rows, { coerce: true }), null, 2);
+  }
 
   // 自动识别方向：以 [ 开头且能解析为 JSON 数组 → JSON→CSV；否则 CSV→JSON
   function detectDir(input: string): string {

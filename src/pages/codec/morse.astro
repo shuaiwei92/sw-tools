@@ -1,0 +1,126 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="摩斯电码 · sw-tools"
+  description="文本与摩斯电码互转，支持声音 / 闪光播放，纯浏览器本地处理。"
+  toolName="摩斯电码"
+  inputPlaceholder="在此粘贴文本或摩斯电码（. - 与 /）…（自动识别方向，失去焦点后转换）"
+  outputLabel="输出"
+  downloadName="morse-result"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="encode">文本 → 摩斯电码</option>
+      <option value="decode">摩斯电码 → 文本</option>
+    </select>
+  </label>
+  <button
+    slot="input-tools"
+    id="play-btn"
+    class="tool-btn tool-btn-sm ml-2"
+    title="用声音 / 闪光播放当前摩斯电码（600Hz 蜂鸣，点 = 1 单位、划 = 3 单位）"
+  >
+    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14l11-7z"/></svg>
+    <span>播放</span>
+  </button>
+</Converter>
+
+<script>
+  import { textToMorse, morseToText, morseTimings } from '../../lib/codec/morse';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = 'SOS HELLO WORLD';
+
+  const dirEl = () => document.getElementById('direction') as HTMLSelectElement;
+  const looksMorse = (text: string) => /^[.\-/|\s]+$/.test(text.trim()) && /[.\-]/.test(text);
+
+  setupConverter({
+    downloadName: 'morse-result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const dir = dirEl().value === 'auto' ? (looksMorse(input) ? 'decode' : 'encode') : dirEl().value;
+      return dir === 'decode' ? morseToText(input) : textToMorse(input);
+    },
+    getDirection: () => dirEl().value,
+    detectDirection: (input) => (looksMorse(input) ? 'decode' : 'encode'),
+    directionLabels: { encode: '文本 → 摩斯电码', decode: '摩斯电码 → 文本' },
+    sample: SAMPLE,
+  });
+
+  // ── 播放：Web Audio 蜂鸣 + 按钮闪光 ──
+  const playBtn = document.getElementById('play-btn') as HTMLButtonElement | null;
+  let stopFn: (() => void) | null = null;
+
+  playBtn?.addEventListener('click', () => {
+    if (stopFn) {
+      stopFn();
+      return;
+    }
+    const input = document.getElementById('input') as HTMLTextAreaElement;
+    const morse =
+      dirEl().value === 'encode' ? textToMorse(input.value) : looksMorse(input.value) ? input.value : textToMorse(input.value);
+    const timings = morseTimings(morse);
+    const totalMs = timings.reduce((s, t) => s + t.ms, 0);
+
+    let ctx: AudioContext | null = null;
+    try {
+      ctx = new AudioContext();
+    } catch {
+      // 无音频环境时仅闪光
+    }
+    const timers: number[] = [];
+    if (ctx) {
+      let t = ctx.currentTime + 0.05;
+      for (const ev of timings) {
+        if (ev.on) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.frequency.value = 600;
+          const dur = ev.ms / 1000;
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.2, t + 0.005);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + Math.max(dur - 0.005, 0.006));
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + dur);
+        }
+        t += ev.ms / 1000;
+      }
+    }
+    // 按钮闪光与「播放中」状态
+    playBtn.classList.add('tool-btn-active');
+    const label = playBtn.querySelector('span');
+    if (label) label.textContent = '停止';
+    const flash = timings.filter((e) => e.on);
+    let elapsed = 0;
+    for (const ev of flash) {
+      const on = window.setTimeout(() => playBtn.classList.add('tree-btn-active'), elapsed);
+      const off = window.setTimeout(() => playBtn.classList.remove('tree-btn-active'), elapsed + ev.ms);
+      timers.push(on, off);
+      elapsed += ev.ms;
+    }
+    const done = window.setTimeout(() => {
+      stopFn = null;
+      playBtn.classList.remove('tool-btn-active');
+      if (label) label.textContent = '播放';
+    }, totalMs + 100);
+    timers.push(done);
+    stopFn = () => {
+      timers.forEach(clearTimeout);
+      ctx?.close();
+      stopFn = null;
+      playBtn.classList.remove('tool-btn-active', 'tree-btn-active');
+      if (label) label.textContent = '播放';
+    };
+  });
+</script>

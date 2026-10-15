@@ -1,0 +1,252 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+const SAMPLES: { label: string; url: string }[] = [
+  { label: '带端口与查询', url: 'https://example.com:8080/path/to/page?q=json+diff&lang=zh-CN&tag=%E5%B7%A5%E5%85%B7#section-2' },
+  { label: '内网带凭据', url: 'http://user:pass@192.168.1.10:9090/admin' },
+  { label: '邮箱协议', url: 'mailto:hello@example.com' },
+  { label: '省略协议', url: 'sw-tools.example.com/a/b/' },
+];
+---
+
+<Tool
+  title="URL 解析器 · sw-tools"
+  toolName="URL 解析器"
+  description="按 WHATWG 标准拆解 URL：协议、认证、主机、端口、路径分段、查询参数与片段，识别内网 / IPv4 / IPv6 等特征。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="URL 输入"
+  outputLabel="解析结果"
+  columns="left-narrow"
+>
+  <!-- 左：输入与示例 -->
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div>
+      <label class="calc-label" for="in-url">URL 地址</label>
+      <input
+        id="in-url"
+        type="text"
+        spellcheck="false"
+        placeholder="粘贴或输入 URL，无协议时按 https 补全…"
+        class="calc-input font-mono text-sm"
+        value="https://example.com:8080/path/to/page?q=json+diff&lang=zh-CN&tag=%E5%B7%A5%E5%85%B7#section-2"
+      />
+      <div class="mt-1.5 flex flex-wrap gap-1.5">
+        <button class="tool-btn tool-btn-sm" id="btn-current" title="解析当前页面地址"><Icon name="globe" /><span>当前网址</span></button>
+        <button class="tool-btn tool-btn-sm" id="btn-clear" title="清空输入"><Icon name="trash" /></button>
+      </div>
+    </div>
+
+    <div>
+      <span class="calc-label">示例</span>
+      <div class="flex flex-wrap gap-1.5">
+        {SAMPLES.map((s) => (
+          <button class="preset-chip" data-url={s.url} title={s.url}>{s.label}</button>
+        ))}
+      </div>
+    </div>
+
+    <details class="rounded-xl border border-slate-200 p-3 text-xs leading-relaxed text-slate-500 dark:border-slate-700 dark:text-slate-400">
+      <summary class="cursor-pointer font-semibold text-slate-600 dark:text-slate-300">解析规则说明</summary>
+      <ul class="mt-2 space-y-1">
+        <li>· 无协议输入（如 <code>example.com/a</code>）按 <code>https://</code> 补全后解析；带协议但非法的输入不猜测。</li>
+        <li>· 查询参数的百分号编码会<span class="font-semibold">自动解码</span>展示，发生过编码的参数带「已编码」标记。</li>
+        <li>· 路径分段逐段解码；空段（首尾斜杠）不展示。</li>
+        <li>· 端口为协议默认值（http 80 / https 443 等）时，WHATWG 会省略，此处单独标注。</li>
+        <li>· 全程本地计算，URL 不会发送到任何服务器。</li>
+      </ul>
+    </details>
+  </div>
+
+  <!-- 右：解析结果 -->
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="url-status"></span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy" title="复制解析报告"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div id="url-error" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"></div>
+    <div id="url-result" class="flex flex-col gap-3">
+      <!-- 规范化提示 -->
+      <div id="norm-card" class="hidden rounded-xl border border-slate-200 p-3 text-xs dark:border-slate-700">
+        <span class="font-semibold text-slate-600 dark:text-slate-300">规范化后（浏览器实际访问）</span>
+        <p class="mt-1 font-mono break-all text-slate-500 dark:text-slate-400" id="norm-href"></p>
+      </div>
+      <!-- 分段 -->
+      <div class="result-card" id="sec-card">
+        <div class="kv" id="sec-rows"></div>
+      </div>
+      <!-- 查询参数 -->
+      <div id="params-card" class="hidden overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+        <div class="flex items-center justify-between border-b border-slate-100 px-3 py-1.5 dark:border-slate-800">
+          <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">查询参数</span>
+          <span class="text-xs text-slate-400" id="params-count"></span>
+        </div>
+        <div class="max-h-72 overflow-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="sticky top-0 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <tr>
+                <th class="px-3 py-1.5 font-medium">键</th>
+                <th class="px-3 py-1.5 font-medium">值</th>
+                <th class="px-3 py-1.5 font-medium">备注</th>
+              </tr>
+            </thead>
+            <tbody id="params-rows" class="zebra font-mono text-slate-600 dark:text-slate-300"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- 路径分段 -->
+      <div id="segs-card" class="hidden overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+        <div class="border-b border-slate-100 px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-600 dark:border-slate-800 dark:text-slate-300">路径分段</div>
+        <div class="flex flex-wrap gap-1.5 p-3 font-mono text-xs" id="segs-list"></div>
+      </div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { parseUrl, urlSections } from '../../lib/network/urlParse';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const inUrl = $<HTMLInputElement>('in-url');
+  const errEl = $('url-error');
+  const statusEl = $('url-status');
+  const normCard = $('norm-card');
+  const normHref = $('norm-href');
+  const secRows = $('sec-rows');
+  const paramsCard = $('params-card');
+  const paramsRows = $('params-rows');
+  const paramsCount = $('params-count');
+  const segsCard = $('segs-card');
+  const segsList = $('segs-list');
+
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  function render() {
+    const raw = inUrl.value.trim();
+    if (!raw) {
+      errEl.classList.add('hidden');
+      statusEl.textContent = '';
+      secRows.innerHTML = '';
+      paramsCard.classList.add('hidden');
+      segsCard.classList.add('hidden');
+      normCard.classList.add('hidden');
+      return;
+    }
+    const p = parseUrl(raw);
+    if (!p) {
+      errEl.textContent = '✗ 无法解析该 URL：协议存在但格式非法';
+      errEl.classList.remove('hidden');
+      statusEl.textContent = '';
+      secRows.innerHTML = '';
+      paramsCard.classList.add('hidden');
+      segsCard.classList.add('hidden');
+      normCard.classList.add('hidden');
+      return;
+    }
+    errEl.classList.add('hidden');
+    statusEl.textContent = p.knownProtocol ? '解析成功' : '非常见协议，已尽力解析';
+
+    // 规范化提示（与输入不同才展示）
+    if (p.href !== raw) {
+      normCard.classList.remove('hidden');
+      normHref.textContent = p.href;
+    } else {
+      normCard.classList.add('hidden');
+    }
+
+    // 分段
+    secRows.innerHTML = urlSections(p)
+      .map(
+        (s) =>
+          `<div class="kv"><span class="k">${esc(s.label)}</span><span class="group flex min-w-0 items-baseline gap-2"><span class="font-mono break-all" title="点击复制">${esc(s.value)}</span>${s.note ? `<span class="shrink-0 text-xs text-slate-400">${esc(s.note)}</span>` : ''}</span></div>`
+      )
+      .join('');
+
+    // 查询参数
+    if (p.params.length) {
+      paramsCard.classList.remove('hidden');
+      paramsCount.textContent = `${p.params.length} 个`;
+      paramsRows.innerHTML = p.params
+        .map(
+          (q) =>
+            `<tr class="border-b border-slate-100 dark:border-slate-800"><td class="px-3 py-1.5">${esc(q.key)}</td><td class="px-3 py-1.5 break-all">${esc(q.value)}</td><td class="px-3 py-1.5">${q.wasEncoded ? '<span class="rounded bg-amber-100 px-1 text-[10px] text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">已编码</span>' : ''}</td></tr>`
+        )
+        .join('');
+    } else {
+      paramsCard.classList.add('hidden');
+    }
+
+    // 路径分段
+    if (p.pathSegments.length) {
+      segsCard.classList.remove('hidden');
+      segsList.innerHTML = p.pathSegments
+        .map((s, i) => `<span class="rounded-md bg-slate-100 px-2 py-1 text-slate-600 dark:bg-slate-800 dark:text-slate-300" title="第 ${i + 1} 段">${esc(s)}</span>`)
+        .join('');
+    } else {
+      segsCard.classList.add('hidden');
+    }
+  }
+
+  /** 纯文本报告（复制用） */
+  function buildReport(): string {
+    const p = parseUrl(inUrl.value.trim());
+    if (!p) return '无法解析该 URL';
+    const lines = urlSections(p).map((s) => `${s.label}：${s.value}${s.note ? `（${s.note}）` : ''}`);
+    if (p.params.length) {
+      lines.push('', '查询参数：');
+      for (const q of p.params) lines.push(`  ${q.key} = ${q.value}${q.wasEncoded ? '（已编码）' : ''}`);
+    }
+    if (p.pathSegments.length) lines.push('', `路径分段：${p.pathSegments.join(' / ')}`);
+    return lines.join('\n');
+  }
+
+  let timer = 0;
+  inUrl.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(render, 200);
+  });
+  $('btn-current').addEventListener('click', () => {
+    inUrl.value = location.href;
+    render();
+  });
+  $('btn-clear').addEventListener('click', () => {
+    inUrl.value = '';
+    render();
+    inUrl.focus();
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-url]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      inUrl.value = btn.dataset.url!;
+      render();
+    });
+  });
+  $('btn-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(buildReport());
+    } catch {
+      /* 忽略 */
+    }
+  });
+
+  // 点击分段值复制该值
+  secRows.addEventListener('click', async (e) => {
+    const row = (e.target as HTMLElement).closest('.kv');
+    const val = row?.querySelector('span.font-mono');
+    if (!val) return;
+    try {
+      await navigator.clipboard.writeText(val.textContent ?? '');
+      const note = row!.querySelector('span.text-xs');
+      if (note) {
+        const old = note.textContent;
+        note.textContent = '已复制 ✓';
+        window.setTimeout(() => (note.textContent = old), 1000);
+      }
+    } catch {
+      /* 忽略 */
+    }
+  });
+
+  render();
+</script>

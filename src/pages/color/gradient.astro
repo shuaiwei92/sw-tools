@@ -1,0 +1,281 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+/** 预设渐变（from → to） */
+const PRESETS: { name: string; from: string; to: string }[] = [
+  { name: '夕阳', from: '#ff7e5f', to: '#feb47b' },
+  { name: '海洋', from: '#2e3192', to: '#1bffff' },
+  { name: '紫陌', from: '#667eea', to: '#764ba2' },
+  { name: '糖果', from: '#ff6fd8', to: '#3813c2' },
+  { name: '森林', from: '#0ba360', to: '#3cba92' },
+  { name: '灰阶', from: '#232526', to: '#414345' },
+];
+
+const ANGLE_PRESETS: { label: string; angle: number }[] = [
+  { label: '向上', angle: 0 },
+  { label: '向右', angle: 90 },
+  { label: '向下', angle: 180 },
+  { label: '向左', angle: 270 },
+];
+---
+
+<Tool
+  title="CSS 渐变生成器 · sw-tools"
+  toolName="CSS 渐变生成器"
+  description="两色线性 / 径向渐变：实时预览、角度调节、中间色阶取色，一键复制 CSS 代码，纯本地生成。"
+  categoryHref="/#color"
+  categoryName="取色 / 配色"
+  inputLabel="渐变参数"
+  outputLabel="预览与代码"
+  columns="left-narrow"
+>
+  <!-- 左：参数 -->
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 起点色 -->
+    <div>
+      <label class="calc-label" for="in-from">起点颜色</label>
+      <div class="flex gap-2">
+        <input id="picker-from" type="color" value="#667eea" class="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" title="选择起点颜色" />
+        <input id="in-from" type="text" spellcheck="false" class="calc-input font-mono text-sm" value="#667eea" />
+      </div>
+    </div>
+    <!-- 终点色 -->
+    <div>
+      <label class="calc-label" for="in-to">终点颜色</label>
+      <div class="flex gap-2">
+        <input id="picker-to" type="color" value="#764ba2" class="h-9 w-12 shrink-0 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" title="选择终点颜色" />
+        <input id="in-to" type="text" spellcheck="false" class="calc-input font-mono text-sm" value="#764ba2" />
+      </div>
+      <button class="tool-btn tool-btn-sm mt-1.5" id="btn-swap" title="交换起点与终点"><Icon name="swap" /><span>交换</span></button>
+    </div>
+
+    <!-- 类型 -->
+    <div>
+      <span class="calc-label">渐变类型</span>
+      <div class="seg w-full" id="type-seg">
+        <button class="flex-1 active" data-type="linear" title="线性渐变">线性</button>
+        <button class="flex-1" data-type="radial" title="径向渐变（圆形）">径向</button>
+      </div>
+    </div>
+
+    <!-- 角度（仅线性） -->
+    <div data-g="angle-group">
+      <span class="calc-label">角度 <span class="font-mono text-slate-400" id="angle-val">135deg</span></span>
+      <input id="sl-angle" type="range" min="0" max="360" value="135" class="w-full accent-brand-600" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5">
+        {ANGLE_PRESETS.map((a) => (
+          <button class="preset-chip" data-angle={a.angle}>{a.label}</button>
+        ))}
+      </div>
+      <p class="mt-1 text-xs text-slate-400">CSS 角度：0° 向上、90° 向右、180° 向下、270° 向左。</p>
+    </div>
+
+    <!-- 中间色阶数量 -->
+    <div>
+      <span class="calc-label">中间色阶数量 <span class="font-mono text-slate-400" id="n-val">5</span></span>
+      <input id="sl-n" type="range" min="2" max="9" value="5" class="w-full accent-brand-600" />
+      <p class="mt-1 text-xs text-slate-400">在起点与终点之间等距取色，用于提取渐变中的关键色。</p>
+    </div>
+
+    <!-- 预设 -->
+    <div>
+      <span class="calc-label">预设渐变</span>
+      <div class="flex flex-wrap gap-1.5">
+        {PRESETS.map((p) => (
+          <button class="preset-chip" data-from={p.from} data-to={p.to} title={`${p.from} → ${p.to}`}>{p.name}</button>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <!-- 右：预览与代码 -->
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="grad-status"></span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy" title="复制 CSS 代码"><Icon name="copy" /></button>
+    <button class="tool-btn tool-btn-sm" id="btn-download" title="下载为 .css 文件"><Icon name="download" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 大预览 -->
+    <div class="relative h-36 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+      <!-- 透明度棋盘底 -->
+      <div class="absolute inset-0" style="background-image:linear-gradient(45deg,#e2e8f0 25%,transparent 25%),linear-gradient(-45deg,#e2e8f0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e2e8f0 75%),linear-gradient(-45deg,transparent 75%,#e2e8f0 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0"></div>
+      <div id="grad-preview" class="absolute inset-0"></div>
+    </div>
+
+    <!-- CSS 代码 -->
+    <div class="rounded-xl border border-slate-200 dark:border-slate-700">
+      <div class="border-b border-slate-100 px-3 py-1.5 text-[0.8125rem] font-semibold text-slate-600 dark:border-slate-800 dark:text-slate-300">CSS 代码</div>
+      <pre id="grad-code" class="overflow-x-auto p-3 font-mono text-xs leading-relaxed text-slate-600 dark:text-slate-300"></pre>
+    </div>
+
+    <!-- 中间色阶 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <div class="flex items-center justify-between">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">中间色阶（点击复制）</span>
+        <span class="text-xs text-slate-400" id="stops-count"></span>
+      </div>
+      <div class="mt-2 flex overflow-hidden rounded-lg" id="stops-row"></div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { parseColor, formatHex, gradientCss, gradientStops, type RGBA } from '../../lib/color/convert';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const pickerFrom = $<HTMLInputElement>('picker-from');
+  const pickerTo = $<HTMLInputElement>('picker-to');
+  const inFrom = $<HTMLInputElement>('in-from');
+  const inTo = $<HTMLInputElement>('in-to');
+  const preview = $('grad-preview');
+  const codeEl = $('grad-code');
+  const stopsRow = $('stops-row');
+  const stopsCount = $('stops-count');
+  const statusEl = $('grad-status');
+  const angleVal = $('angle-val');
+  const nVal = $('n-val');
+  const slAngle = $<HTMLInputElement>('sl-angle');
+  const slN = $<HTMLInputElement>('sl-n');
+
+  const state = {
+    from: { r: 102, g: 126, b: 234, a: 1 } as RGBA,
+    to: { r: 118, g: 75, b: 162, a: 1 } as RGBA,
+    type: 'linear' as 'linear' | 'radial',
+    angle: 135,
+    n: 5,
+  };
+
+  function currentCss(): string {
+    const stops = [
+      { color: formatHex(state.from, true), position: 0 },
+      { color: formatHex(state.to, true), position: 100 },
+    ];
+    return gradientCss({ stops, angle: state.angle, type: state.type });
+  }
+
+  function render() {
+    const css = currentCss();
+    preview.style.background = css;
+    codeEl.textContent = `background-image: ${css};`;
+    angleVal.textContent = `${state.angle}deg`;
+    nVal.textContent = String(state.n);
+    statusEl.textContent = `${formatHex(state.from, true)} → ${formatHex(state.to, true)}`;
+
+    // 中间色阶
+    const stops = gradientStops(state.from, state.to, state.n);
+    stopsCount.textContent = `${state.n} 个`;
+    stopsRow.innerHTML = stops
+      .map(
+        (s) =>
+          `<button class="h-9 min-w-9 flex-1 transition hover:scale-105" style="background:${s.color}" data-copy="${s.color}" title="${s.color} · 点击复制"></button>`
+      )
+      .join('');
+  }
+
+  function bindColorPair(picker: HTMLInputElement, input: HTMLInputElement, key: 'from' | 'to') {
+    const apply = (c: RGBA) => {
+      state[key] = c;
+      if (document.activeElement !== input) input.value = formatHex(c, true);
+      picker.value = formatHex(c, false);
+      render();
+    };
+    input.addEventListener('input', () => {
+      const c = parseColor(input.value);
+      if (c) apply(c);
+    });
+    picker.addEventListener('input', () => {
+      const c = parseColor(picker.value);
+      if (c) apply(c);
+    });
+  }
+  bindColorPair(pickerFrom, inFrom, 'from');
+  bindColorPair(pickerTo, inTo, 'to');
+
+  $('btn-swap').addEventListener('click', () => {
+    const f = state.from;
+    state.from = state.to;
+    state.to = f;
+    inFrom.value = formatHex(state.from, true);
+    inTo.value = formatHex(state.to, true);
+    pickerFrom.value = formatHex(state.from, false);
+    pickerTo.value = formatHex(state.to, false);
+    render();
+  });
+
+  $('type-seg').querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $('type-seg').querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.type = btn.dataset.type as 'linear' | 'radial';
+      // 径向无角度概念
+      document.querySelectorAll<HTMLElement>('[data-g="angle-group"]').forEach((el) => el.classList.toggle('hidden', state.type === 'radial'));
+      render();
+    });
+  });
+
+  slAngle.addEventListener('input', () => {
+    state.angle = Number(slAngle.value);
+    render();
+  });
+  slN.addEventListener('input', () => {
+    state.n = Number(slN.value);
+    render();
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-angle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.angle = Number(btn.dataset.angle);
+      slAngle.value = String(state.angle);
+      render();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-from]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const f = parseColor(btn.dataset.from!);
+      const t = parseColor(btn.dataset.to!);
+      if (!f || !t) return;
+      state.from = f;
+      state.to = t;
+      inFrom.value = btn.dataset.from!;
+      inTo.value = btn.dataset.to!;
+      pickerFrom.value = formatHex(f, false);
+      pickerTo.value = formatHex(t, false);
+      render();
+    });
+  });
+
+  $('btn-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(codeEl.textContent ?? '');
+      statusEl.textContent = '已复制 CSS ✓';
+      window.setTimeout(render, 1200);
+    } catch {
+      /* 忽略 */
+    }
+  });
+  $('btn-download').addEventListener('click', () => {
+    const blob = new Blob([codeEl.textContent ?? ''], { type: 'text/css;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gradient.css';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // 点击色阶复制
+  stopsRow.addEventListener('click', async (e) => {
+    const el = (e.target as HTMLElement).closest('[data-copy]') as HTMLElement | null;
+    if (!el) return;
+    try {
+      await navigator.clipboard.writeText(el.dataset.copy!);
+      statusEl.textContent = `已复制 ${el.dataset.copy} ✓`;
+      window.setTimeout(render, 1200);
+    } catch {
+      /* 忽略 */
+    }
+  });
+
+  render();
+</script>

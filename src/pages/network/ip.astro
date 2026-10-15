@@ -1,0 +1,138 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { CIDR_TABLE } from '../../lib/network/subnet';
+---
+
+<Tool
+  title="IP / 子网计算器 · sw-tools"
+  toolName="IP / 子网计算器"
+  description="IPv4 子网划分：网络地址、广播地址、可用主机范围、掩码与通配符、私网判断，附 CIDR 速查表。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="IP 与前缀"
+  outputLabel="子网信息"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="ip">IPv4 地址</label>
+      <input id="ip" class="calc-input font-mono text-sm" value="192.168.1.100" spellcheck="false" />
+    </div>
+    <div>
+      <label class="calc-label" for="cidr">CIDR 前缀长度（0 ~ 32）</label>
+      <div class="flex items-center gap-2">
+        <input id="cidr" type="number" min="0" max="32" class="calc-input font-mono text-sm" value="24" />
+        <span class="text-sm text-slate-400">/ {24}</span>
+      </div>
+      <input
+        id="cidr-range"
+        type="range"
+        min="0"
+        max="32"
+        value="24"
+        class="mt-2 w-full accent-brand-600"
+      />
+    </div>
+    <p id="subnet-error" class="hidden text-xs text-rose-600 dark:text-rose-400"></p>
+    <div class="text-xs leading-relaxed text-slate-400">
+      <p class="mb-1 font-semibold text-slate-500 dark:text-slate-400">说明</p>
+      <p>· /31、/32 为点对点与环回特殊用途，无网关/广播概念</p>
+      <p>· 私网地址：10.0.0.0/8、172.16.0.0/12、192.168.0.0/16、127.0.0.0/8</p>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div class="result-card">
+      <div class="text-xs text-slate-500 dark:text-slate-400">网段</div>
+      <div id="subnet-cidr" class="mt-1 font-mono text-xl font-bold text-brand-600 dark:text-brand-300">—</div>
+      <div id="subnet-mask" class="mt-1 font-mono text-sm text-slate-500 dark:text-slate-400">—</div>
+    </div>
+    <div id="subnet-info" class="flex flex-col"></div>
+    <div>
+      <span class="calc-label">CIDR 速查</span>
+      <div class="max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-left text-xs">
+          <thead class="sticky top-0 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <tr>
+              <th class="px-3 py-1.5">前缀</th>
+              <th class="px-3 py-1.5">子网掩码</th>
+              <th class="px-3 py-1.5">可用主机</th>
+            </tr>
+          </thead>
+          <tbody class="font-mono">
+            {CIDR_TABLE.map((r, i) => (
+              <tr class={i % 2 === 1 ? 'bg-slate-50 dark:bg-slate-800/40' : ''} data-cidr-row={r.cidr}>
+                <td class="px-3 py-1">/{r.cidr}</td>
+                <td class="px-3 py-1">{r.mask}</td>
+                <td class="px-3 py-1">{r.hosts.toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { calcSubnet } from '../../lib/network/subnet';
+
+  const ipEl = document.getElementById('ip') as HTMLInputElement;
+  const cidrEl = document.getElementById('cidr') as HTMLInputElement;
+  const rangeEl = document.getElementById('cidr-range') as HTMLInputElement;
+  const errEl = document.getElementById('subnet-error')!;
+  const cidrText = ipEl.closest('div')?.parentElement?.querySelector('span');
+  const infoEl = document.getElementById('subnet-info')!;
+  const cidrOut = document.getElementById('subnet-cidr')!;
+  const maskOut = document.getElementById('subnet-mask')!;
+
+  function kv(k: string, v: string, mono = false) {
+    return `<div class="kv"><span class="k">${k}</span><span class="v ${mono ? 'font-mono' : ''}">${v}</span></div>`;
+  }
+
+  function render() {
+    const cidr = Number(cidrEl.value);
+    // 同步 "…/ 24" 提示
+    if (cidrText) cidrText.textContent = `/ ${Number.isFinite(cidr) ? cidr : '?'}`;
+    const r = calcSubnet(ipEl.value, cidr);
+    if ('error' in r) {
+      errEl.textContent = r.error;
+      errEl.classList.remove('hidden');
+      infoEl.innerHTML = '';
+      cidrOut.textContent = '—';
+      maskOut.textContent = '—';
+      return;
+    }
+    errEl.classList.add('hidden');
+    cidrOut.textContent = `${r.network}/${r.cidr}`;
+    maskOut.textContent = `掩码 ${r.mask}`;
+    infoEl.innerHTML =
+      kv('IP 地址', r.ip, true) +
+      kv('网段地址', r.network, true) +
+      kv('广播地址', r.broadcast, true) +
+      kv('可用主机范围', `${r.firstHost} ~ ${r.lastHost}`, true) +
+      kv('可用主机数', r.hostCount.toLocaleString()) +
+      kv('地址总数', r.totalCount.toLocaleString()) +
+      kv('子网掩码', r.mask, true) +
+      kv('通配符掩码', r.wildcard, true) +
+      kv('地址类别', r.ipClass) +
+      kv('是否私网', r.isPrivate ? '是（私有地址段）' : '否（公网地址）');
+    // 速查表高亮当前行
+    document.querySelectorAll('[data-cidr-row]').forEach((row) => {
+      row.classList.toggle('bg-brand-50', Number((row as HTMLElement).dataset.cidrRow) === r.cidr);
+      row.classList.toggle('dark:bg-brand-950/40', Number((row as HTMLElement).dataset.cidrRow) === r.cidr);
+    });
+  }
+
+  ipEl.addEventListener('input', render);
+  cidrEl.addEventListener('input', () => {
+    rangeEl.value = cidrEl.value;
+    render();
+  });
+  rangeEl.addEventListener('input', () => {
+    cidrEl.value = rangeEl.value;
+    render();
+  });
+
+  render();
+</script>

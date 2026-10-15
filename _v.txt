@@ -1,3 +1,0 @@
-﻿.astro -> cleared
-node_modules/.vite -> FAIL: RuntimeException: [safe-delete][SAFE_DELETE_FAIL_CLOSED] {"target":"node_modules/.vite","reason":"trash-failed","detail":"OK D:\\Myproject\\sw-tools\\node_modules\\.vite"}
-node_modules/.astro -> cleared

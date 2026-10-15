@@ -1,0 +1,97 @@
+---
+// 满屏双栏工具布局：左「输入 / 参数」右「输出 / 结果」，占满视口剩余高度，面板内部各自滚动。
+// 与 Converter / JSON 格式化保持同一套页头、工具栏视觉规范；表单类与文本类工具均可复用。
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  toolName: string;
+  categoryHref?: string;
+  categoryName?: string;
+  /** 左栏标题，默认「输入」 */
+  inputLabel?: string;
+  /** 右栏标题，默认「输出」 */
+  outputLabel?: string;
+  /** 双栏宽度预设（lg 起生效）：even 左右均分；left-narrow 左栏 20rem；left-wide 左栏 26rem */
+  columns?: 'even' | 'left-narrow' | 'left-wide';
+}
+const {
+  title,
+  description,
+  toolName,
+  categoryHref = '/',
+  categoryName = '工具',
+  inputLabel = '输入',
+  outputLabel = '输出',
+  columns = 'even',
+} = Astro.props;
+
+// 列宽预设以字面量写在本文件中，确保 Tailwind 能扫描到对应工具类
+const COLS: Record<NonNullable<Props['columns']>, string> = {
+  even: 'lg:grid-cols-2',
+  'left-narrow': 'lg:grid-cols-[20rem_minmax(0,1fr)]',
+  'left-wide': 'lg:grid-cols-[26rem_minmax(0,1fr)]',
+};
+---
+
+<Base title={title} description={description} full>
+  <!-- 页头：单行紧凑，把纵向空间让给工作区 -->
+  <div class="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+    <h1 class="text-lg font-bold">{toolName}</h1>
+    <nav class="flex items-center gap-1.5 text-xs" aria-label="面包屑">
+      <a
+        href="/"
+        class="cursor-pointer text-brand-600 transition hover:text-brand-700 hover:underline underline-offset-2"
+        title="返回首页">首页</a
+      >
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <a
+        href={categoryHref}
+        class="cursor-pointer text-slate-400 transition hover:text-brand-600 hover:underline underline-offset-2 dark:text-slate-500"
+        title={`查看${categoryName}分类下的全部工具`}>{categoryName}</a
+      >
+      <span class="text-slate-300 dark:text-slate-600">/</span>
+      <span class="cursor-default font-medium text-slate-700 dark:text-slate-200" title="当前页面">{toolName}</span>
+    </nav>
+    <span class="text-xs text-slate-400">{description}</span>
+  </div>
+
+  <!-- 左右双栏：占满剩余视口高度；移动端单列堆叠、页面整体滚动，桌面端面板内部滚动 -->
+  <div
+    class:list={[
+      'mt-2 grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-3 lg:grid-rows-[minmax(0,1fr)]',
+      COLS[columns],
+    ]}
+  >
+    <!-- 左：输入 / 参数 -->
+    <section class="flex min-h-[20rem] min-w-0 flex-col lg:min-h-0">
+      <div
+        class="flex shrink-0 flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/60"
+      >
+        <span class="mr-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{inputLabel}</span>
+        <slot name="input-tools" />
+      </div>
+      <div
+        class="flex min-h-0 min-w-0 flex-1 flex-col rounded-b-xl border border-slate-300 bg-white lg:overflow-hidden dark:border-slate-700 dark:bg-slate-900"
+      >
+        <slot name="input" />
+      </div>
+    </section>
+
+    <!-- 右：输出 / 结果 -->
+    <section class="flex min-h-[20rem] min-w-0 flex-col lg:min-h-0">
+      <div
+        class="flex shrink-0 flex-wrap items-center gap-1 rounded-t-xl border border-b-0 border-slate-300 bg-slate-100 px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800/60"
+      >
+        <span class="mr-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{outputLabel}</span>
+        <slot name="output-tools" />
+      </div>
+      <div
+        class="flex min-h-0 min-w-0 flex-1 flex-col rounded-b-xl border border-slate-300 bg-white lg:overflow-hidden dark:border-slate-700 dark:bg-slate-900"
+      >
+        <slot name="output" />
+      </div>
+    </section>
+  </div>
+</Base>

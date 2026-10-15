@@ -1,0 +1,247 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="几何计算器 · sw-tools"
+  toolName="几何计算器"
+  description="常见平面图形与立体的面积、周长、体积计算，纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="图形与参数"
+  outputLabel="计算结果"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div class="shrink-0">
+      <span class="calc-label">选择图形</span>
+      <div id="geo-shapes" class="geo-grid"></div>
+    </div>
+    <div class="shrink-0">
+      <span class="calc-label">参数</span>
+      <div id="geo-inputs" class="grid gap-3 sm:grid-cols-2"></div>
+    </div>
+    <p class="mt-auto shrink-0 text-xs leading-relaxed text-slate-400">选择图形并输入参数后自动计算；所有数值需为正数。</p>
+  </div>
+
+  <button slot="output-tools" id="geo-copy" class="tool-btn tool-btn-sm" title="复制全部结果">复制结果</button>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div class="flex shrink-0 items-center justify-between">
+      <span id="geo-title" class="text-base font-semibold text-slate-700 dark:text-slate-200">—</span>
+      <span id="geo-formula" class="font-mono text-xs text-slate-400"></span>
+    </div>
+    <div class="flex min-h-0 flex-1 gap-3">
+      <!-- 示意图 -->
+      <div
+        id="geo-diagram"
+        class="flex min-h-0 min-w-0 flex-1 items-center justify-center rounded-xl border border-slate-200 p-2 text-brand-500 dark:border-slate-700 dark:text-brand-400"
+      >
+      </div>
+      <!-- 数值结果（斑马纹） -->
+      <div id="geo-rows" class="zebra flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700"></div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { geometrySolve, type GeoShape } from '../../lib/calc/geometry';
+
+  const shapesEl = document.getElementById('geo-shapes') as HTMLDivElement;
+  const inputsEl = document.getElementById('geo-inputs') as HTMLDivElement;
+  const titleEl = document.getElementById('geo-title') as HTMLDivElement;
+  const formulaEl = document.getElementById('geo-formula') as HTMLSpanElement;
+  const diagramEl = document.getElementById('geo-diagram') as HTMLDivElement;
+  const rowsEl = document.getElementById('geo-rows') as HTMLDivElement;
+
+  interface ShapeDef {
+    id: GeoShape;
+    label: string;
+    formula: string;
+    fields: { key: string; label: string; def: number }[];
+    /** 示意图 SVG（viewBox 160×120，描边继承 currentColor） */
+    svg: string;
+  }
+  const S = 'fill="currentColor" fill-opacity="0.08" stroke="currentColor" stroke-width="2" stroke-linejoin="round"';
+  const D = 'stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" fill="none"';
+  const T = 'fill="currentColor" font-size="11" text-anchor="middle"';
+
+  const SHAPES: ShapeDef[] = [
+    {
+      id: 'circle',
+      label: '圆',
+      formula: 'A = πr²',
+      fields: [{ key: 'r', label: '半径 r', def: 5 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><circle cx="80" cy="60" r="44" ${S}/><path d="M80 60 H124" ${D}/><circle cx="80" cy="60" r="3" fill="currentColor"/><text x="102" y="54" ${T}>r</text></svg>`,
+    },
+    {
+      id: 'rectangle',
+      label: '矩形',
+      formula: 'A = w·h',
+      fields: [{ key: 'w', label: '宽 w', def: 6 }, { key: 'h', label: '高 h', def: 4 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><rect x="42" y="28" width="76" height="56" ${S}/><path d="M42 92 H118" ${D}/><text x="80" y="108" ${T}>w</text><text x="132" y="60" ${T}>h</text></svg>`,
+    },
+    {
+      id: 'square',
+      label: '正方形',
+      formula: 'A = a²',
+      fields: [{ key: 'a', label: '边长 a', def: 5 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><rect x="52" y="26" width="56" height="56" ${S}/><path d="M52 90 H108" ${D}/><text x="80" y="106" ${T}>a</text></svg>`,
+    },
+    {
+      id: 'rightTriangle',
+      label: '直角三角形',
+      formula: 'A = ½ab',
+      fields: [{ key: 'a', label: '直角边 a', def: 3 }, { key: 'b', label: '直角边 b', def: 4 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M34 92 H126 V28 Z" ${S}/><path d="M114 92 V80 H126" stroke="currentColor" stroke-width="1.5" fill="none"/><text x="70" y="106" ${T}>b</text><text x="30" y="60" ${T}>a</text></svg>`,
+    },
+    {
+      id: 'triangle',
+      label: '三角形',
+      formula: '海伦公式',
+      fields: [{ key: 'a', label: '边 a', def: 3 }, { key: 'b', label: '边 b', def: 4 }, { key: 'c', label: '边 c', def: 5 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M30 90 H130 L76 26 Z" ${S}/><text x="52" y="66" ${T}>a</text><text x="106" y="66" ${T}>b</text><text x="80" y="108" ${T}>c</text></svg>`,
+    },
+    {
+      id: 'trapezoid',
+      label: '梯形',
+      formula: 'A = (a+b)h/2',
+      fields: [{ key: 'a', label: '上底 a', def: 3 }, { key: 'b', label: '下底 b', def: 5 }, { key: 'h', label: '高 h', def: 4 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M58 30 H102 L134 90 H26 Z" ${S}/><path d="M80 30 V90" ${D}/><text x="80" y="22" ${T}>a</text><text x="80" y="108" ${T}>b</text><text x="92" y="62" ${T}>h</text></svg>`,
+    },
+    {
+      id: 'ellipse',
+      label: '椭圆',
+      formula: 'A = πab',
+      fields: [{ key: 'a', label: '半长轴 a', def: 6 }, { key: 'b', label: '半短轴 b', def: 4 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><ellipse cx="80" cy="60" rx="52" ry="30" ${S}/><path d="M80 60 H132" ${D}/><text x="106" y="54" ${T}>a</text><text x="88" y="40" ${T}>b</text></svg>`,
+    },
+    {
+      id: 'sphere',
+      label: '球',
+      formula: 'V = 4/3πr³',
+      fields: [{ key: 'r', label: '半径 r', def: 3 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><circle cx="80" cy="60" r="44" ${S}/><ellipse cx="80" cy="60" rx="44" ry="14" ${D}/><path d="M80 60 H124" ${D}/><text x="102" y="54" ${T}>r</text></svg>`,
+    },
+    {
+      id: 'cylinder',
+      label: '圆柱',
+      formula: 'V = πr²h',
+      fields: [{ key: 'r', label: '底面半径 r', def: 3 }, { key: 'h', label: '高 h', def: 8 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><ellipse cx="80" cy="30" rx="40" ry="13" ${S}/><path d="M40 30 V80 A40 13 0 0 0 120 80 V30" ${S}/><ellipse cx="80" cy="80" rx="40" ry="13" ${D}/><path d="M80 30 V80" ${D}/><text x="102" y="24" ${T}>r</text><text x="134" y="58" ${T}>h</text></svg>`,
+    },
+    {
+      id: 'cone',
+      label: '圆锥',
+      formula: 'V = ⅓πr²h',
+      fields: [{ key: 'r', label: '底面半径 r', def: 3 }, { key: 'h', label: '高 h', def: 6 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M80 18 L118 84 A38 12 0 0 1 42 84 Z" ${S}/><ellipse cx="80" cy="84" rx="38" ry="12" ${D}/><path d="M80 18 V84" ${D}/><text x="100" y="78" ${T}>r</text><text x="94" y="52" ${T}>h</text></svg>`,
+    },
+    {
+      id: 'cube',
+      label: '正方体',
+      formula: 'V = a³',
+      fields: [{ key: 'a', label: '棱长 a', def: 4 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M46 42 V94 H104 V42 Z M46 42 L68 22 H126 V74 L104 94 M68 22 V74 H126" ${S}/><text x="86" y="112" ${T}>a</text></svg>`,
+    },
+    {
+      id: 'cuboid',
+      label: '长方体',
+      formula: 'V = lwh',
+      fields: [{ key: 'l', label: '长 l', def: 5 }, { key: 'w', label: '宽 w', def: 3 }, { key: 'h', label: '高 h', def: 4 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M30 48 V96 H106 V48 Z M30 48 L52 28 H128 V76 L106 96 M52 28 V76 H128" ${S}/><text x="68" y="114" ${T}>l</text><text x="24" y="72" ${T}>h</text><text x="140" y="56" ${T}>w</text></svg>`,
+    },
+    {
+      id: 'pyramid',
+      label: '正四棱锥',
+      formula: 'V = ⅓a²h',
+      fields: [{ key: 'a', label: '底边长 a', def: 4 }, { key: 'h', label: '高 h', def: 6 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><path d="M80 16 L112 84 L48 84 Z M48 84 L112 84" ${S}/><path d="M64 92 L96 92 L112 84 M64 92 L48 84 M64 92 L80 16" ${D}/><path d="M80 16 V84" ${D}/><text x="80" y="106" ${T}>a</text><text x="94" y="50" ${T}>h</text></svg>`,
+    },
+    {
+      id: 'torus',
+      label: '圆环',
+      formula: 'V = 2π²Rr²',
+      fields: [{ key: 'R', label: '中心半径 R', def: 6 }, { key: 'r', label: '管半径 r', def: 1.5 }],
+      svg: `<svg viewBox="0 0 160 120" class="h-full max-h-44 w-full"><ellipse cx="80" cy="60" rx="54" ry="34" ${S}/><ellipse cx="80" cy="60" rx="22" ry="13" fill="var(--color-slate-100)" stroke="currentColor" stroke-width="1.5"/><text x="80" y="16" ${T}>R</text><text x="102" y="52" ${T}>r</text></svg>`,
+    },
+  ];
+  let current = SHAPES[0];
+
+  function buildShapes() {
+    shapesEl.innerHTML = '';
+    SHAPES.forEach((s) => {
+      const b = document.createElement('button');
+      b.textContent = s.label;
+      b.type = 'button';
+      if (s.id === current.id) b.classList.add('active');
+      b.addEventListener('click', () => {
+        current = s;
+        buildShapes();
+        buildInputs();
+        compute();
+      });
+      shapesEl.appendChild(b);
+    });
+  }
+
+  function buildInputs() {
+    inputsEl.innerHTML = '';
+    current.fields.forEach((field) => {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = `<label class="calc-label" for="geo-${field.key}">${field.label}</label>
+        <input id="geo-${field.key}" type="number" step="any" class="calc-input" value="${field.def}" />`;
+      inputsEl.appendChild(wrap);
+    });
+    current.fields.forEach((field) => {
+      const el = document.getElementById('geo-' + field.key) as HTMLInputElement;
+      el.addEventListener('input', compute);
+    });
+  }
+
+  let lastResult: { title: string; rows: { k: string; v: string }[] } | null = null;
+
+  function compute() {
+    const dims: Record<string, number> = {};
+    let invalid = false;
+    current.fields.forEach((field) => {
+      const el = document.getElementById('geo-' + field.key) as HTMLInputElement | null;
+      const v = el ? parseFloat(el.value) : NaN;
+      if (el && (Number.isNaN(v) || v <= 0)) invalid = true;
+      dims[field.key] = v;
+    });
+    if (invalid) {
+      titleEl.textContent = '请输入有效数值';
+      formulaEl.textContent = '';
+      diagramEl.innerHTML = '';
+      rowsEl.innerHTML = '';
+      lastResult = null;
+      return;
+    }
+    try {
+      const res = geometrySolve(current.id, dims);
+      titleEl.textContent = res.title;
+      formulaEl.textContent = current.formula;
+      diagramEl.innerHTML = current.svg;
+      rowsEl.innerHTML = res.rows
+        .map((r) => `<div class="res-row"><span class="k">${r.k}</span><span class="v">${r.v}</span></div>`)
+        .join('');
+      lastResult = res;
+    } catch (e) {
+      titleEl.textContent = '错误';
+      formulaEl.textContent = '';
+      diagramEl.innerHTML = '';
+      rowsEl.innerHTML = `<div class="p-3 text-sm text-rose-500">${(e as Error).message}</div>`;
+      lastResult = null;
+    }
+  }
+
+  document.getElementById('geo-copy')?.addEventListener('click', async () => {
+    if (!lastResult) return;
+    const text = `${lastResult.title}\n${lastResult.rows.map((r) => `${r.k}: ${r.v}`).join('\n')}`;
+    await navigator.clipboard.writeText(text);
+  });
+
+  buildShapes();
+  buildInputs();
+  compute();
+</script>

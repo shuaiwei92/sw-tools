@@ -1,0 +1,157 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="进制转换 / 位运算 · sw-tools"
+  toolName="进制转换 / 位运算"
+  description="2 ~ 36 任意进制互转（含小数），并支持 AND / OR / XOR / NOT / 移位等位运算，纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="进制转换"
+  outputLabel="位运算"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div>
+      <label class="calc-label" for="b-val">数值</label>
+      <input id="b-val" class="calc-input font-mono" spellcheck="false" placeholder="如 255 或 ff" />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="b-from">源进制</label>
+        <select id="b-from" class="calc-input"></select>
+      </div>
+      <div>
+        <label class="calc-label" for="b-to">目标进制</label>
+        <select id="b-to" class="calc-input"></select>
+      </div>
+    </div>
+    <div class="result-card">
+      <div class="text-xs text-slate-500 dark:text-slate-400">转换结果</div>
+      <div id="b-out" class="mt-1 break-all font-mono text-lg font-semibold text-brand-600 dark:text-brand-300">—</div>
+    </div>
+    <div class="space-y-0">
+      <div class="kv"><span class="k">二进制</span><span class="v font-mono" id="b-2">—</span></div>
+      <div class="kv"><span class="k">八进制</span><span class="v font-mono" id="b-8">—</span></div>
+      <div class="kv"><span class="k">十进制</span><span class="v font-mono" id="b-10">—</span></div>
+      <div class="kv"><span class="k">十六进制</span><span class="v font-mono" id="b-16">—</span></div>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="bw-a">操作数 A</label>
+        <input id="bw-a" class="calc-input font-mono" spellcheck="false" placeholder="如 12" />
+      </div>
+      <div>
+        <label class="calc-label" for="bw-b">操作数 B</label>
+        <input id="bw-b" class="calc-input font-mono" spellcheck="false" placeholder="如 10" />
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="bw-op">运算</label>
+        <select id="bw-op" class="calc-input">
+          <option value="and">AND（按位与）</option>
+          <option value="or">OR（按位或）</option>
+          <option value="xor">XOR（按位异或）</option>
+          <option value="not">NOT（对 A 取反）</option>
+          <option value="shl">A 左移 B 位</option>
+          <option value="shr">A 右移 B 位</option>
+        </select>
+      </div>
+      <div>
+        <label class="calc-label" for="bw-base">进制</label>
+        <select id="bw-base" class="calc-input">
+          <option value="10">十进制</option>
+          <option value="2">二进制</option>
+          <option value="8">八进制</option>
+          <option value="16">十六进制</option>
+        </select>
+      </div>
+    </div>
+    <div class="result-card">
+      <div class="text-xs text-slate-500 dark:text-slate-400">运算结果</div>
+      <div id="bw-out" class="mt-1 break-all font-mono text-lg font-semibold text-brand-600 dark:text-brand-300">—</div>
+    </div>
+    <p class="text-[11px] leading-relaxed text-slate-400">按所选进制解析 A / B 并输出；NOT 只作用于 A，忽略 B。</p>
+  </div>
+</Tool>
+
+<script>
+  import { convertBase, bitwise } from '../../lib/calc/base';
+
+  const val = document.getElementById('b-val') as HTMLInputElement;
+  const fromSel = document.getElementById('b-from') as HTMLSelectElement;
+  const toSel = document.getElementById('b-to') as HTMLSelectElement;
+  const out = document.getElementById('b-out') as HTMLDivElement;
+  const cells = { 2: document.getElementById('b-2')!, 8: document.getElementById('b-8')!, 10: document.getElementById('b-10')!, 16: document.getElementById('b-16')! } as Record<number, HTMLElement>;
+
+  const bwA = document.getElementById('bw-a') as HTMLInputElement;
+  const bwB = document.getElementById('bw-b') as HTMLInputElement;
+  const bwOp = document.getElementById('bw-op') as HTMLSelectElement;
+  const bwBase = document.getElementById('bw-base') as HTMLSelectElement;
+  const bwOut = document.getElementById('bw-out') as HTMLDivElement;
+
+  function fillBaseSelect(sel: HTMLSelectElement) {
+    let html = '';
+    const commons: [number, string][] = [
+      [2, '2 进制'],
+      [8, '8 进制'],
+      [10, '10 进制'],
+      [16, '16 进制'],
+    ];
+    for (const [v, label] of commons) html += `<option value="${v}">${label}</option>`;
+    html += '<option value="36">36 进制</option>';
+    sel.innerHTML = html;
+  }
+
+  function computeConvert() {
+    const s = val.value.trim();
+    if (!s) {
+      out.textContent = '—';
+      (Object.values(cells) as HTMLElement[]).forEach((el) => (el.textContent = '—'));
+      return;
+    }
+    const from = Number(fromSel.value);
+    const to = Number(toSel.value);
+    try {
+      const r = convertBase(s, from, to);
+      out.textContent = r;
+      for (const base of [2, 8, 10, 16]) {
+        cells[base].textContent = convertBase(s, from, base);
+      }
+    } catch (e) {
+      out.textContent = '✗ ' + (e as Error).message;
+      (Object.values(cells) as HTMLElement[]).forEach((el) => (el.textContent = '—'));
+    }
+  }
+
+  function computeBitwise() {
+    const a = bwA.value.trim();
+    const b = bwB.value.trim();
+    if (!a || (!b && bwOp.value !== 'not')) {
+      bwOut.textContent = '—';
+      return;
+    }
+    try {
+      const r = bitwise(a, b, bwOp.value as 'and', Number(bwBase.value));
+      bwOut.textContent = r;
+    } catch (e) {
+      bwOut.textContent = '✗ ' + (e as Error).message;
+    }
+  }
+
+  fillBaseSelect(fromSel);
+  fillBaseSelect(toSel);
+  fromSel.value = '10';
+  toSel.value = '16';
+
+  [val, fromSel, toSel].forEach((el) => el.addEventListener('input', computeConvert));
+  [val, fromSel, toSel].forEach((el) => el.addEventListener('change', computeConvert));
+  [bwA, bwB, bwOp, bwBase].forEach((el) => el.addEventListener('input', computeBitwise));
+  [bwA, bwB, bwOp, bwBase].forEach((el) => el.addEventListener('change', computeBitwise));
+
+  computeConvert();
+</script>

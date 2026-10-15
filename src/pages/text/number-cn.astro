@@ -1,0 +1,49 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="数字转中文 · sw-tools"
+  description="阿拉伯数字转人民币金额大写（壹贰叁…元角分）与普通中文读法，支持千分位与负数。"
+  toolName="数字转中文"
+  inputPlaceholder="输入数字，如 1234.56（支持千分位逗号）"
+  outputLabel="转换结果"
+  downloadName="number-cn"
+  downloadExt="txt"
+  categoryHref="/#text"
+  categoryName="文本处理"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    输出
+    <select
+      id="mode"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="upper">人民币大写</option>
+      <option value="plain">普通读法</option>
+      <option value="both">两者都显示</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { toChineseNumber, toChineseUpper } from '../../lib/text/numberCn';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = '1234.56';
+
+  setupConverter({
+    downloadName: 'number-cn',
+    downloadExt: 'txt',
+    sample: SAMPLE,
+    convert: (input) => {
+      const mode = (document.getElementById('mode') as HTMLSelectElement).value;
+      const upper = toChineseUpper(input);
+      const plain = toChineseNumber(input);
+      if (!upper && !plain) return '';
+      if (mode === 'upper') return upper;
+      if (mode === 'plain') return plain;
+      return `人民币大写：${upper}\n普通读法：${plain}`;
+    },
+  });
+</script>

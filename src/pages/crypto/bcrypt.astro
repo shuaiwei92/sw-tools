@@ -1,0 +1,118 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="Bcrypt 哈希 · sw-tools"
+  toolName="Bcrypt 哈希"
+  description="Bcrypt 哈希生成与校验（纯浏览器实现的 Blowfish/eksblowfish，可调 cost），全部本地计算。"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+  inputLabel="口令"
+  outputLabel="结果与校验"
+>
+  <button slot="input-tools" id="bc-hash" class="tool-btn tool-btn-sm" title="生成哈希">生成哈希</button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-4 p-3">
+    <div>
+      <label class="calc-label" for="bc-pass">口令</label>
+      <input id="bc-pass" type="text" class="calc-input font-mono" placeholder="输入口令" />
+    </div>
+    <div>
+      <label class="calc-label" for="bc-cost">cost（迭代指数 2^cost，默认 10）</label>
+      <div class="flex items-center gap-3">
+        <input id="bc-cost" type="range" min="4" max="12" value="10" step="1" class="w-full accent-brand-600" />
+        <span id="bc-cost-val" class="w-8 shrink-0 text-sm font-bold text-brand-600 dark:text-brand-300">10</span>
+      </div>
+    </div>
+    <p class="mt-auto text-xs leading-relaxed text-slate-400">
+      说明：每次生成使用随机 salt（16 字节），相同口令在不同 salt 下结果不同，属正常现象。
+      cost 每 +1 耗时翻倍：cost 10 约 0.1~0.5 秒，cost 12 约 1~4 秒（取决于设备）。
+    </p>
+  </div>
+
+  <button slot="output-tools" id="bc-copy" class="tool-btn tool-btn-sm" title="复制哈希结果">复制哈希</button>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+    <div class="result-card shrink-0">
+      <div class="text-xs text-slate-500 dark:text-slate-400">哈希结果（$2b$ 格式）</div>
+      <div id="bc-out" class="mt-1 break-all font-mono text-sm text-slate-800 dark:text-slate-100">—</div>
+      <div id="bc-meta" class="mt-1 text-xs text-slate-400"></div>
+    </div>
+    <div class="flex min-h-0 flex-1 flex-col gap-2">
+      <label class="calc-label shrink-0" for="bc-hash-in">校验：粘贴完整 bcrypt 哈希（支持 $2a$ / $2b$ / $2y$）</label>
+      <textarea id="bc-hash-in" class="calc-input min-h-0 flex-1 resize-none font-mono text-sm" placeholder="$2b$10$...."></textarea>
+      <button id="bc-verify" class="btn-primary shrink-0" title="用上方口令校验">用上方口令校验</button>
+      <div id="bc-verify-out" class="result-card hidden shrink-0 text-sm"></div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { bcryptHash, bcryptCompare, parseBcryptHash } from '../../lib/crypto/bcrypt';
+
+  const passEl = document.getElementById('bc-pass') as HTMLInputElement;
+  const costEl = document.getElementById('bc-cost') as HTMLInputElement;
+  const costVal = document.getElementById('bc-cost-val') as HTMLSpanElement;
+  const outEl = document.getElementById('bc-out') as HTMLDivElement;
+  const metaEl = document.getElementById('bc-meta') as HTMLDivElement;
+  const hashIn = document.getElementById('bc-hash-in') as HTMLTextAreaElement;
+  const verifyOut = document.getElementById('bc-verify-out') as HTMLDivElement;
+
+  costEl.addEventListener('input', () => {
+    costVal.textContent = costEl.value;
+  });
+
+  document.getElementById('bc-hash')?.addEventListener('click', async () => {
+    const pass = passEl.value;
+    if (!pass) {
+      outEl.textContent = '请先输入口令';
+      return;
+    }
+    outEl.textContent = '计算中…';
+    metaEl.textContent = '';
+    try {
+      const cost = parseInt(costEl.value, 10);
+      const t0 = performance.now();
+      const h = await bcryptHash(pass, cost);
+      const ms = Math.round(performance.now() - t0);
+      outEl.textContent = h;
+      const parsed = parseBcryptHash(h);
+      metaEl.textContent = parsed ? `cost = ${parsed.cost} · salt = ${parsed.saltB64} · 耗时约 ${ms} ms` : '';
+    } catch (e) {
+      outEl.textContent = '✗ ' + (e as Error).message;
+    }
+  });
+
+  document.getElementById('bc-copy')?.addEventListener('click', async () => {
+    const t = outEl.textContent ?? '';
+    if (!t || t === '—' || t === '计算中…') return;
+    await navigator.clipboard.writeText(t);
+    metaEl.textContent = '已复制到剪贴板';
+  });
+
+  document.getElementById('bc-verify')?.addEventListener('click', async () => {
+    const pass = passEl.value;
+    const hash = hashIn.value.trim();
+    verifyOut.classList.remove('hidden');
+    if (!pass || !hash) {
+      verifyOut.textContent = '请填写口令与待校验哈希';
+      return;
+    }
+    verifyOut.textContent = '校验中…';
+    try {
+      const t0 = performance.now();
+      const ok = await bcryptCompare(pass, hash);
+      const ms = Math.round(performance.now() - t0);
+      verifyOut.textContent = ok
+        ? `✓ 校验通过：口令与哈希匹配（耗时约 ${ms} ms）`
+        : '✗ 校验未通过：口令与哈希不匹配';
+      verifyOut.classList.toggle('text-emerald-600', ok);
+      verifyOut.classList.toggle('dark:text-emerald-400', ok);
+      verifyOut.classList.toggle('text-rose-600', !ok);
+      verifyOut.classList.toggle('dark:text-rose-400', !ok);
+    } catch (e) {
+      verifyOut.textContent = '✗ ' + (e as Error).message;
+    }
+  });
+</script>

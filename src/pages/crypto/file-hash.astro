@@ -1,0 +1,102 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="文件哈希 · sw-tools"
+  toolName="文件哈希"
+  description="拖拽文件计算 MD5 / SHA-1 / SHA-256 / SHA-512，分块本地读取，不上传服务器。"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+  inputLabel="文件"
+  outputLabel="哈希结果"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-4 p-3">
+    <div
+      id="fh-drop"
+      class="flex flex-1 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 transition hover:border-brand-500 dark:border-slate-600"
+    >
+      <svg class="h-8 w-8 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">点击选择或拖拽文件到此处</p>
+      <p class="mt-1 text-xs text-slate-400">文件仅在浏览器内读取计算，不会上传</p>
+      <input id="fh-file" type="file" class="hidden" />
+    </div>
+
+    <div id="fh-info" class="hidden shrink-0 text-sm text-slate-500 dark:text-slate-400"></div>
+
+    <div class="flex shrink-0 flex-wrap items-center gap-4 text-sm">
+      <span class="calc-label mb-0">算法</span>
+      <label class="flex items-center gap-1.5"><input type="checkbox" class="fh-algo h-3.5 w-3.5 accent-brand-600" value="MD5" checked />MD5</label>
+      <label class="flex items-center gap-1.5"><input type="checkbox" class="fh-algo h-3.5 w-3.5 accent-brand-600" value="SHA-1" checked />SHA-1</label>
+      <label class="flex items-center gap-1.5"><input type="checkbox" class="fh-algo h-3.5 w-3.5 accent-brand-600" value="SHA-256" checked />SHA-256</label>
+      <label class="flex items-center gap-1.5"><input type="checkbox" class="fh-algo h-3.5 w-3.5 accent-brand-600" value="SHA-512" />SHA-512</label>
+    </div>
+  </div>
+
+  <div slot="output" class="min-h-0 flex-1 overflow-y-auto p-3">
+    <div id="fh-results" class="zebra flex min-h-0 flex-1 flex-col gap-2"></div>
+  </div>
+</Tool>
+
+<script>
+  import { hashFile, formatSize, FILE_HASH_ALGOS, type FileHashAlgo } from '../../lib/crypto/fileHash';
+
+  const drop = document.getElementById('fh-drop') as HTMLDivElement;
+  const fileInput = document.getElementById('fh-file') as HTMLInputElement;
+  const info = document.getElementById('fh-info') as HTMLDivElement;
+  const results = document.getElementById('fh-results') as HTMLDivElement;
+
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files?.[0]) void handleFile(fileInput.files[0]);
+  });
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('border-brand-500', 'bg-brand-50', 'dark:bg-brand-950');
+  });
+  drop.addEventListener('dragleave', () => {
+    drop.classList.remove('border-brand-500', 'bg-brand-50', 'dark:bg-brand-950');
+  });
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('border-brand-500', 'bg-brand-50', 'dark:bg-brand-950');
+    const f = e.dataTransfer?.files[0];
+    if (f) void handleFile(f);
+  });
+
+  async function handleFile(file: File) {
+    const algos = Array.from(document.querySelectorAll<HTMLInputElement>('.fh-algo'))
+      .filter((c) => c.checked)
+      .map((c) => c.value as FileHashAlgo);
+    info.classList.remove('hidden');
+    info.textContent = `${file.name} · ${formatSize(file.size)} · ${file.type || '未知类型'}`;
+    results.innerHTML = '<div class="text-sm text-slate-400">计算中…</div>';
+    try {
+      const hashes = await hashFile(file, algos.length ? algos : FILE_HASH_ALGOS);
+      results.innerHTML = '';
+      for (const algo of algos.length ? algos : FILE_HASH_ALGOS) {
+        const row = document.createElement('div');
+        row.className = 'res-row flex-1 shrink-0';
+        const k = document.createElement('div');
+        k.className = 'k';
+        k.textContent = algo;
+        const v = document.createElement('div');
+        v.className = 'v font-mono text-sm break-all';
+        v.textContent = hashes[algo];
+        const btn = document.createElement('button');
+        btn.className = 'tool-btn tool-btn-sm shrink-0';
+        btn.title = `复制 ${algo}`;
+        btn.textContent = '复制';
+        btn.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(hashes[algo]);
+          btn.textContent = '已复制';
+          setTimeout(() => (btn.textContent = '复制'), 1200);
+        });
+        row.append(k, v, btn);
+        results.appendChild(row);
+      }
+    } catch (e) {
+      results.innerHTML = `<div class="text-sm text-rose-600 dark:text-rose-400">✗ ${(e as Error).message}</div>`;
+    }
+  }
+</script>

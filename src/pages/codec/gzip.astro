@@ -1,0 +1,73 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="Gzip / Deflate 压缩 · sw-tools"
+  description="文本 Gzip / Deflate 压缩与解压（浏览器原生 CompressionStream，零依赖，纯本地处理）。"
+  toolName="Gzip / Deflate 压缩"
+  inputPlaceholder="压缩模式：粘贴文本；解压模式：粘贴 Base64 密文…（失去焦点后转换）"
+  outputLabel="输出"
+  downloadName="gzip-result"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="compress">文本 → 压缩（Base64）</option>
+      <option value="decompress">Base64 → 解压文本</option>
+    </select>
+  </label>
+  <label slot="input-tools" class="ml-2 flex items-center gap-1 text-xs text-slate-500">
+    格式
+    <select
+      id="format"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="gzip">Gzip</option>
+      <option value="deflate">Deflate（zlib 封装）</option>
+      <option value="deflate-raw">Deflate（原始流）</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { compressToBytes, decompressToText, type GzipFormat } from '../../lib/codec/gzip';
+  import { bytesToBase64, base64ToBytes } from '../../lib/codec/bytes';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = '重复重复重复重复重复重复重复重复重复重复重复重复';
+
+  const dirEl = () => document.getElementById('direction') as HTMLSelectElement;
+  const fmtEl = () => document.getElementById('format') as HTMLSelectElement;
+  const looksB64 = (text: string) => {
+    const t = text.trim().replace(/\s+/g, '');
+    return /^[A-Za-z0-9+/]+={0,2}$/.test(t) && t.length % 4 === 0 && t.length >= 8;
+  };
+
+  setupConverter({
+    downloadName: 'gzip-result',
+    downloadExt: 'txt',
+    convert: async (input) => {
+      const fmt = fmtEl().value as GzipFormat;
+      if (dirEl().value === 'decompress') {
+        return decompressToText(base64ToBytes(input.trim()), fmt);
+      }
+      const bytes = await compressToBytes(input, fmt);
+      return bytesToBase64(bytes);
+    },
+    sample: SAMPLE,
+  });
+
+  // 方向 / 格式切换后立即重算
+  for (const id of ['direction', 'format']) {
+    document.getElementById(id)?.addEventListener('change', () => {
+      document.getElementById('input')?.dispatchEvent(new Event('blur'));
+    });
+  }
+</script>

@@ -1,0 +1,548 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { BP_PRESETS, LPR_QUOTE, LOAN_TYPE_META } from '../../lib/calc/loan';
+
+/** 四种贷款的区别一览（2026-10 利率环境） */
+const TYPE_TABLE: { head: string; rows: string[][] } = {
+  head: ['类型', '利率依据', '浮动性', '参考利率', '额度特点'],
+  rows: [
+    ['商贷', '5 年期以上 LPR + 基点', '浮动，约每年重定价', '首套主流 LPR−30BP ≈ 3.2%', '按评估价与首付比例，首付 15% 起'],
+    ['公积金', '央行统一固定利率', '固定，调息次年 1/1 跟进', '首套 2.6% / 二套 3.075%', '有上限，常见单人 60 万、双职工 100~120 万'],
+    ['组合贷', '两段各自定价', '商贷段浮动', '介于纯商贷与纯公积金之间', '公积金用尽后差额走商贷'],
+    ['其他贷款', '银行产品定价', '多为固定', '通常高于房贷', '用途受限，期限常见 1~5 年'],
+  ],
+};
+---
+
+<Tool
+  title="房贷 / 贷款计算器 · sw-tools"
+  toolName="房贷 / 贷款计算器"
+  description="商贷（LPR + 基点）、公积金、组合贷与其他贷款：月供、总利息、还款计划与还款方式对比。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="贷款参数"
+  outputLabel="还款分析"
+  columns="left-wide"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 贷款类型 -->
+    <div>
+      <span class="calc-label">贷款类型</span>
+      <div class="seg w-full" id="type-seg">
+        {LOAN_TYPE_META.map((t) => (
+          <button
+            class:list={['flex-1', t.id === 'commercial' && 'active']}
+            data-type={t.id}
+            title={t.short}
+          >
+            {t.name}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    <!-- 类型差异说明：随类型切换 -->
+    <div
+      class="rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs leading-relaxed dark:border-slate-700 dark:bg-slate-800/40"
+      id="type-meta"
+    >
+      <p class="font-semibold text-brand-700 dark:text-brand-300" id="tm-name"></p>
+      <p class="mt-0.5 text-slate-500 dark:text-slate-400" id="tm-short"></p>
+      <ul class="mt-1.5 space-y-1 text-slate-600 dark:text-slate-300" id="tm-points"></ul>
+    </div>
+
+    <!-- 金额：商贷 / 公积金 / 其他贷款 -->
+    <div data-g="amount">
+      <label class="calc-label" for="in-amount" id="amount-label">贷款金额（元）</label>
+      <input id="in-amount" type="number" class="calc-input" value="1000000" min="0" step="10000" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5" data-preset="amount">
+        <button class="preset-chip" data-v="500000">50 万</button>
+        <button class="preset-chip" data-v="1000000">100 万</button>
+        <button class="preset-chip" data-v="1500000">150 万</button>
+        <button class="preset-chip" data-v="2000000">200 万</button>
+      </div>
+    </div>
+
+    <!-- 金额：组合贷的商贷部分 -->
+    <div class="hidden" data-g="combo-amount">
+      <label class="calc-label" for="in-combo-amount">商贷部分金额（元）</label>
+      <input id="in-combo-amount" type="number" class="calc-input" value="700000" min="0" step="10000" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5" data-preset="combo-amount">
+        <button class="preset-chip" data-v="400000">40 万</button>
+        <button class="preset-chip" data-v="700000">70 万</button>
+        <button class="preset-chip" data-v="1000000">100 万</button>
+      </div>
+    </div>
+
+    <!-- 金额：组合贷的公积金部分 -->
+    <div class="hidden" data-g="provident">
+      <label class="calc-label" for="in-provident">公积金部分金额（元）</label>
+      <input id="in-provident" type="number" class="calc-input" value="600000" min="0" step="10000" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5" data-preset="provident">
+        <button class="preset-chip" data-v="600000">60 万</button>
+        <button class="preset-chip" data-v="900000">90 万</button>
+        <button class="preset-chip" data-v="1200000">120 万</button>
+      </div>
+    </div>
+
+    <!-- 年限 -->
+    <div>
+      <label class="calc-label" for="in-years">贷款年限（年）</label>
+      <input id="in-years" type="number" class="calc-input" value="30" min="1" max="30" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5" data-preset="years">
+        <button class="preset-chip" data-v="5">5</button>
+        <button class="preset-chip" data-v="10">10</button>
+        <button class="preset-chip" data-v="15">15</button>
+        <button class="preset-chip" data-v="20">20</button>
+        <button class="preset-chip" data-v="25">25</button>
+        <button class="preset-chip" data-v="30">30</button>
+      </div>
+    </div>
+
+    <!-- 还款方式 -->
+    <div>
+      <span class="calc-label">还款方式</span>
+      <div class="seg w-full" id="method-seg">
+        <button class="flex-1 active" data-method="equal-installment">等额本息</button>
+        <button class="flex-1" data-method="equal-principal">等额本金</button>
+      </div>
+      <p class="mt-1 text-xs text-slate-400" id="method-hint"></p>
+    </div>
+
+    <!-- 定价：商贷 -->
+    <div class="hidden" data-g="commercial">
+      <span class="calc-label">利率定价</span>
+      <div class="seg w-full" id="pricing-seg">
+        <button class="flex-1 active" data-pricing="lpr">LPR + 基点</button>
+        <button class="flex-1" data-pricing="fixed">固定利率</button>
+      </div>
+
+      <div data-g="pricing-lpr" class="mt-2 space-y-2">
+        <div class="flex gap-2">
+          <div class="flex-1">
+            <label class="calc-label" for="in-lpr">LPR（%）</label>
+            <input id="in-lpr" type="number" step="0.01" class="calc-input" value="3.5" />
+          </div>
+          <div class="flex-1">
+            <label class="calc-label" for="in-bp">基点（BP）</label>
+            <input id="in-bp" type="number" class="calc-input" value="-30" step="5" />
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5" id="bp-presets">
+          {BP_PRESETS.map((bp) => (
+            <button class="preset-chip" data-bp={bp}>{bp > 0 ? `+${bp}` : bp}</button>
+          ))}
+        </div>
+        <div>
+          <label class="calc-label" for="in-repricing">重定价日</label>
+          <select id="in-repricing" class="calc-input">
+            <option value="jan1">次年 1 月 1 日</option>
+            <option value="anniversary">对年对月（放款对应日）</option>
+          </select>
+        </div>
+        <p class="text-xs leading-relaxed text-slate-400" id="lpr-hint"></p>
+      </div>
+
+      <div class="hidden" data-g="pricing-fixed">
+        <label class="calc-label" for="in-fixed">固定年利率（%）</label>
+        <input id="in-fixed" type="number" step="0.01" class="calc-input" value="4.2" />
+      </div>
+    </div>
+
+    <!-- 定价：组合贷的商贷段（LPR + 基点） -->
+    <div class="hidden" data-g="combo-pricing">
+      <span class="calc-label">商贷段利率（LPR + 基点）</span>
+      <div class="mt-1 flex gap-2">
+        <div class="flex-1">
+          <label class="calc-label" for="in-lpr2">LPR（%）</label>
+          <input id="in-lpr2" type="number" step="0.01" class="calc-input" value="3.5" />
+        </div>
+        <div class="flex-1">
+          <label class="calc-label" for="in-bp2">基点（BP）</label>
+          <input id="in-bp2" type="number" class="calc-input" value="-30" step="5" />
+        </div>
+      </div>
+      <div class="mt-1.5 flex flex-wrap gap-1.5" id="bp-presets2">
+        {BP_PRESETS.map((bp) => (
+          <button class="preset-chip" data-bp={bp}>{bp > 0 ? `+${bp}` : bp}</button>
+        ))}
+      </div>
+    </div>
+
+    <!-- 定价：公积金段（公积金贷款 / 组合贷共用） -->
+    <div class="hidden" data-g="house">
+      <span class="calc-label" id="house-label">套数认定（影响公积金利率）</span>
+      <div class="seg w-full" id="house-seg">
+        <button class="flex-1 active" data-house="first">首套</button>
+        <button class="flex-1" data-house="second">二套</button>
+      </div>
+      <p class="mt-1 text-xs leading-relaxed text-slate-400" id="house-hint"></p>
+    </div>
+
+    <!-- 定价：其他贷款 -->
+    <div class="hidden" data-g="other">
+      <label class="calc-label" for="in-other-rate">固定年利率（%）</label>
+      <input id="in-other-rate" type="number" step="0.01" class="calc-input" value="4.5" />
+      <p class="mt-1 text-xs leading-relaxed text-slate-400">消费贷 / 经营贷等由银行产品定价，一般为固定利率，不随 LPR 调整。</p>
+    </div>
+
+    <!-- 四种贷款区别一览 -->
+    <details class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <summary class="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">四种贷款区别一览</summary>
+      <div class="mt-2 overflow-x-auto">
+        <table class="w-full text-left text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+          <thead>
+            <tr class="text-slate-400">
+              {TYPE_TABLE.head.map((h) => <th class="py-1 pr-2 font-medium whitespace-nowrap">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {TYPE_TABLE.rows.map((r) => (
+              <tr class="border-t border-slate-100 dark:border-slate-800">
+                {r.map((c, i) => <td class:list={['py-1 pr-2', i === 0 && 'font-medium text-slate-600 dark:text-slate-300']}>{c}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-2 text-[11px] text-slate-400">
+        LPR 为 {LPR_QUOTE.updated} 报价（5 年期以上 {LPR_QUOTE.fiveYearPlus}%）；公积金利率为 2026 年执行标准。仅供参考，以银行与公积金中心审批为准。
+      </p>
+    </details>
+  </div>
+
+  <span slot="output-tools" id="rate-badge" class="text-xs text-slate-400"></span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 汇总 -->
+    <div class="result-card space-y-0" id="summary">
+      <div class="kv"><span class="k" id="s-monthly-k">月供</span><span class="v big" id="s-monthly">—</span></div>
+      <div class="kv"><span class="k" id="s-last-k">末月月供</span><span class="v" id="s-last">—</span></div>
+      <div class="kv"><span class="k">总还款额</span><span class="v" id="s-total">—</span></div>
+      <div class="kv"><span class="k">总利息</span><span class="v" id="s-interest">—</span></div>
+      <div class="kv"><span class="k">利息占总还款</span><span class="v" id="s-ratio">—</span></div>
+    </div>
+
+    <!-- 对比 / 组合贷分项 -->
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 p-3 text-xs leading-relaxed dark:border-slate-700" id="compare-card">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">还款方式对比</span>
+        <p class="mt-1 text-slate-600 dark:text-slate-300" id="cmp-line1">—</p>
+        <p class="mt-0.5 text-slate-400" id="cmp-line2">—</p>
+      </div>
+      <div
+        class="hidden rounded-xl border border-slate-200 p-3 text-xs leading-relaxed dark:border-slate-700"
+        id="seg-card"
+      >
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">分段明细</span>
+        <div class="mt-1 space-y-1" id="seg-list"></div>
+      </div>
+    </div>
+
+    <!-- 还款计划 -->
+    <div class="flex min-h-[14rem] flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+      <div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-1.5 dark:border-slate-800">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">还款计划</span>
+        <span class="text-xs text-slate-400" id="plan-count"></span>
+      </div>
+      <div class="min-h-0 flex-1 overflow-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="sticky top-0 bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <tr>
+              <th class="px-3 py-2">期数</th>
+              <th class="px-3 py-2">月供</th>
+              <th class="px-3 py-2">本金</th>
+              <th class="px-3 py-2">利息</th>
+              <th class="px-3 py-2">剩余本金</th>
+            </tr>
+          </thead>
+          <tbody id="plan-rows" class="zebra font-mono text-slate-600 dark:text-slate-300"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import {
+    LOAN_TYPE_META,
+    calcLoan,
+    compareMethods,
+    effectiveRate,
+    providentRate,
+    type HouseType,
+    type LoanMethod,
+    type LoanType,
+    type PricingMode,
+    type RepricingDay,
+  } from '../../lib/calc/loan';
+  import { fmt, fmtCN } from '../../lib/calc/format';
+
+  // ---- DOM 引用（与导入函数刻意区分命名）----
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const inAmount = $<HTMLInputElement>('in-amount');
+  const inComboAmount = $<HTMLInputElement>('in-combo-amount');
+  const inProvident = $<HTMLInputElement>('in-provident');
+  const inYears = $<HTMLInputElement>('in-years');
+  const inLpr = $<HTMLInputElement>('in-lpr');
+  const inBp = $<HTMLInputElement>('in-bp');
+  const inLpr2 = $<HTMLInputElement>('in-lpr2');
+  const inBp2 = $<HTMLInputElement>('in-bp2');
+  const inFixed = $<HTMLInputElement>('in-fixed');
+  const inOtherRate = $<HTMLInputElement>('in-other-rate');
+  const inRepricing = $<HTMLSelectElement>('in-repricing');
+  const amountLabel = $('amount-label');
+  const tmName = $('tm-name');
+  const tmShort = $('tm-short');
+  const tmPoints = $('tm-points');
+  const methodHint = $('method-hint');
+  const lprHint = $('lpr-hint');
+  const houseLabel = $('house-label');
+  const houseHint = $('house-hint');
+  const rateBadge = $('rate-badge');
+  const sMonthlyK = $('s-monthly-k');
+  const sMonthly = $('s-monthly');
+  const sLastK = $('s-last-k');
+  const sLast = $('s-last');
+  const sTotal = $('s-total');
+  const sInterest = $('s-interest');
+  const sRatio = $('s-ratio');
+  const cmpLine1 = $('cmp-line1');
+  const cmpLine2 = $('cmp-line2');
+  const segCard = $('seg-card');
+  const segList = $('seg-list');
+  const planRows = $('plan-rows');
+  const planCount = $('plan-count');
+
+  const state = {
+    type: 'commercial' as LoanType,
+    method: 'equal-installment' as LoanMethod,
+    pricing: 'lpr' as PricingMode,
+    house: 'first' as HouseType,
+    repricing: 'jan1' as RepricingDay,
+  };
+
+  const yuan = (n: number) => '¥' + fmt(n);
+  const num = (el: HTMLInputElement, fallback: number) => {
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : fallback;
+  };
+
+  /** 按类型与定价方式拼装分段 */
+  function buildSegments(): { label: string; principal: number; annualRate: number }[] {
+    const years = num(inYears, 30);
+    switch (state.type) {
+      case 'commercial': {
+        const rate = effectiveRate(state.pricing, {
+          lpr: num(inLpr, 3.5),
+          bp: num(inBp, 0),
+          fixedRate: num(inFixed, 4.2),
+        });
+        return [{ label: '商贷', principal: num(inAmount, 0), annualRate: rate }];
+      }
+      case 'provident':
+        return [
+          { label: '公积金', principal: num(inAmount, 0), annualRate: providentRate(state.house, years) },
+        ];
+      case 'combo': {
+        const rate = num(inLpr2, 3.5) + num(inBp2, 0) / 100;
+        return [
+          { label: '商贷', principal: num(inComboAmount, 0), annualRate: rate },
+          { label: '公积金', principal: num(inProvident, 0), annualRate: providentRate(state.house, years) },
+        ];
+      }
+      case 'other':
+        return [{ label: '贷款', principal: num(inAmount, 0), annualRate: num(inOtherRate, 4.5) }];
+    }
+  }
+
+  /** 当前执行利率文案（输出栏角标） */
+  function rateBadgeText(segs: { label: string; annualRate: number }[]): string {
+    if (!segs.length) return '';
+    if (segs.length === 1) return `执行利率 ${fmt(segs[0].annualRate)}%`;
+    return segs.map((s) => `${s.label} ${fmt(s.annualRate)}%`).join(' · ');
+  }
+
+  function syncType() {
+    const t = state.type;
+    // 分组显隐
+    document.querySelectorAll<HTMLElement>('[data-g]').forEach((el) => {
+      const g = el.dataset.g!;
+      let show = false;
+      if (g === 'amount') show = t === 'commercial' || t === 'provident' || t === 'other';
+      else if (g === 'combo-amount' || g === 'provident') show = t === 'combo';
+      else if (g === 'commercial') show = t === 'commercial';
+      else if (g === 'combo-pricing') show = t === 'combo';
+      else if (g === 'house') show = t === 'provident' || t === 'combo';
+      else if (g === 'other') show = t === 'other';
+      else if (g === 'pricing-lpr') show = t === 'commercial' ? state.pricing === 'lpr' : false;
+      else if (g === 'pricing-fixed') show = t === 'commercial' && state.pricing === 'fixed';
+      el.classList.toggle('hidden', !show);
+    });
+
+    // 类型说明卡
+    const meta = LOAN_TYPE_META.find((m) => m.id === t)!;
+    tmName.textContent = meta.name;
+    tmShort.textContent = meta.short;
+    tmPoints.innerHTML = meta.points.map((p) => `<li class="flex gap-1.5"><span class="text-brand-500">·</span><span>${p}</span></li>`).join('');
+
+    // 金额标签
+    amountLabel.textContent = t === 'provident' ? '公积金贷款金额（元）' : '贷款金额（元）';
+
+    // 公积金段标签与提示
+    houseLabel.textContent = t === 'provident' ? '套数认定（影响公积金利率）' : '公积金段套数认定';
+    const years = num(inYears, 30);
+    const pr = providentRate(state.house, years);
+    houseHint.textContent = `${state.house === 'first' ? '首套' : '二套'} · ${years > 5 ? '5 年以上' : '5 年以下（含）'} → 执行利率 ${fmt(pr)}%（央行统一固定，不随 LPR 变动）`;
+
+    // 商贷 LPR 提示
+    const lprV = num(inLpr, 3.5);
+    const bpV = num(inBp, 0);
+    lprHint.innerHTML =
+      `5 年期以上 LPR ${fmt(lprV)}%（${LPR_TEXT}）${bpV >= 0 ? ' + ' : ' − '}${fmt(Math.abs(bpV))}BP` +
+      ` = <b class="text-brand-600 dark:text-brand-300">${fmt(effectiveRate('lpr', { lpr: lprV, bp: bpV }))}%</b>` +
+      `；重定价日：${state.repricing === 'jan1' ? '次年 1 月 1 日' : '对年对月'}，届时按最新 LPR 重新定价。`;
+  }
+
+  const LPR_TEXT = '2026-09-20 报价';
+
+  function render() {
+    const years = num(inYears, 30);
+    const segs = buildSegments();
+    rateBadge.textContent = rateBadgeText(segs);
+
+    const totalPrincipal = segs.reduce((s, x) => s + x.principal, 0);
+    const show = (el: HTMLElement, text: string) => (el.textContent = text);
+    if (totalPrincipal <= 0 || years <= 0) {
+      show(sMonthly, '—');
+      show(sLast, '—');
+      show(sTotal, '—');
+      show(sInterest, '—');
+      show(sRatio, '—');
+      show(cmpLine1, '—');
+      show(cmpLine2, '');
+      segList.innerHTML = '';
+      segCard.classList.add('hidden');
+      planRows.innerHTML = '';
+      planCount.textContent = '';
+      return;
+    }
+
+    try {
+      const res = calcLoan({ method: state.method, years, segments: segs });
+      const isEP = state.method === 'equal-principal';
+      sMonthlyK.textContent = isEP ? '首月月供' : '月供（固定）';
+      sMonthly.textContent = yuan(res.monthlyPayment);
+      sLastK.textContent = isEP ? '末月月供' : '月供恒定';
+      sLast.textContent = isEP ? yuan(res.lastPayment) : '—';
+      sTotal.textContent = yuan(res.totalPayment);
+      sTotal.title = `约 ${fmtCN(res.totalPayment)}`;
+      sInterest.textContent = yuan(res.totalInterest);
+      sInterest.title = `约 ${fmtCN(res.totalInterest)}`;
+      sRatio.textContent = fmt((res.totalInterest / res.totalPayment) * 100, 1) + '%';
+
+      // 还款方式对比（同一参数换算法）
+      const cmp = compareMethods({ years, segments: segs });
+      cmpLine1.textContent = `等额本金比等额本息少付利息 ${yuan(cmp.interestSaved)}`;
+      cmpLine2.textContent = `代价是首月多付 ${yuan(cmp.principal.monthlyPayment - cmp.installment.monthlyPayment)}，之后每月递减约 ${yuan(
+        (cmp.principal.monthlyPayment - cmp.principal.lastPayment) / (res.schedule.length - 1 || 1)
+      )}`;
+
+      // 组合贷分段明细
+      if (res.segments.length > 1) {
+        segCard.classList.remove('hidden');
+        segList.innerHTML = res.segments
+          .map(
+            (s) =>
+              `<div class="flex items-baseline justify-between gap-2"><span class="font-medium text-slate-600 dark:text-slate-300">${s.label}</span><span class="text-slate-500 dark:text-slate-400">月供 ${yuan(s.monthlyPayment)} · 利息 ${yuan(s.totalInterest)}（${fmt(s.annualRate)}%）</span></div>`
+          )
+          .join('');
+      } else {
+        segCard.classList.add('hidden');
+        segList.innerHTML = '';
+      }
+
+      planCount.textContent = `共 ${res.schedule.length} 期`;
+      planRows.innerHTML = res.schedule
+        .map(
+          (row) =>
+            `<tr class="border-b border-slate-100 dark:border-slate-800">
+              <td class="px-3 py-2">${row.month}</td>
+              <td class="px-3 py-2">${fmt(row.payment)}</td>
+              <td class="px-3 py-2">${fmt(row.principalPart)}</td>
+              <td class="px-3 py-2">${fmt(row.interestPart)}</td>
+              <td class="px-3 py-2">${fmt(row.remaining)}</td>
+            </tr>`
+        )
+        .join('');
+    } catch (e) {
+      sMonthly.textContent = '✗ ' + (e as Error).message;
+      planRows.innerHTML = '';
+      planCount.textContent = '';
+    }
+  }
+
+  // ---- 分段控件（seg）通用激活逻辑 ----
+  function bindSeg(containerId: string, key: 'type' | 'method' | 'pricing' | 'house', after?: () => void) {
+    const box = $(containerId);
+    box.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        box.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        (state as unknown as Record<string, string>)[key] = btn.dataset[key]!;
+        after?.();
+        render();
+      });
+    });
+  }
+
+  const METHOD_HINTS: Record<LoanMethod, string> = {
+    'equal-installment': '等额本息：每月还款额固定，前期利息占比高，适合预算稳定的人群',
+    'equal-principal': '等额本金：每月本金固定、月供逐月递减，总利息更少，前期压力较大',
+  };
+
+  // ---- 事件绑定 ----
+  bindSeg('type-seg', 'type', syncType);
+  bindSeg('method-seg', 'method', () => (methodHint.textContent = METHOD_HINTS[state.method]));
+  bindSeg('pricing-seg', 'pricing', syncType);
+  bindSeg('house-seg', 'house', syncType);
+
+  [inAmount, inComboAmount, inProvident, inYears, inLpr, inBp, inLpr2, inBp2, inFixed, inOtherRate].forEach((el) => {
+    el.addEventListener('input', () => {
+      syncType();
+      render();
+    });
+  });
+  inRepricing.addEventListener('change', () => {
+    state.repricing = inRepricing.value as RepricingDay;
+    syncType();
+    render();
+  });
+
+  // 预设 chips：金额 / 年限 / 基点
+  document.querySelectorAll<HTMLElement>('[data-preset]').forEach((box) => {
+    const which = box.dataset.preset!;
+    const target = which === 'amount' ? inAmount : which === 'combo-amount' ? inComboAmount : which === 'provident' ? inProvident : inYears;
+    box.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        target.value = btn.dataset.v!;
+        syncType();
+        render();
+      });
+    });
+  });
+  for (const id of ['bp-presets', 'bp-presets2']) {
+    $(id).querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const bp = btn.dataset.bp!;
+        (id === 'bp-presets' ? inBp : inBp2).value = bp;
+        syncType();
+        render();
+      });
+    });
+  }
+
+  methodHint.textContent = METHOD_HINTS[state.method];
+  syncType();
+  render();
+</script>

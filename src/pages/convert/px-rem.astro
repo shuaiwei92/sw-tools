@@ -1,0 +1,103 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { commonRows } from '../../lib/convert/pxRem';
+---
+
+<Tool
+  title="px ↔ rem 换算 · sw-tools"
+  toolName="px ↔ rem / em"
+  description="CSS 单位换算：px 与 rem / em 互转（可调根字号基准），附常用字号速查表。"
+  categoryHref="/#convert"
+  categoryName="格式转换"
+  inputLabel="换算"
+  outputLabel="常用字号速查"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="base">根字号基准（html font-size）</label>
+      <div class="flex items-center gap-2">
+        <input id="base" type="number" min="1" max="100" value="16" class="calc-input text-sm" />
+        <span class="text-sm text-slate-400">px</span>
+      </div>
+      <p class="mt-1 text-xs text-slate-400">常见基准：16（默认）/ 10（网易 Nebula 等方案）/ 37.5（iPhone 6 适配）/ 50（750 设计稿）</p>
+    </div>
+
+    <div class="result-card">
+      <span class="calc-label mb-0">px → rem / em</span>
+      <div class="mt-2 flex items-center gap-2">
+        <input id="px-in" type="number" class="calc-input font-mono text-sm" value="24" />
+        <span class="text-sm text-slate-400">px =</span>
+      </div>
+      <div class="mt-2 flex flex-col gap-1 font-mono text-sm">
+        <div class="kv"><span class="k">rem</span><span class="v" id="px-to-rem">—</span></div>
+        <div class="kv"><span class="k">em</span><span class="v" id="px-to-em">—</span></div>
+      </div>
+    </div>
+
+    <div class="result-card">
+      <span class="calc-label mb-0">rem / em → px</span>
+      <div class="mt-2 flex items-center gap-2">
+        <input id="unit-in" type="number" step="0.01" class="calc-input font-mono text-sm" value="1.5" />
+        <span class="text-sm text-slate-400">=</span>
+      </div>
+      <div class="mt-2 flex flex-col gap-1 font-mono text-sm">
+        <div class="kv"><span class="k">px</span><span class="v" id="unit-to-px">—</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div class="shrink-0 px-3 py-2 text-xs text-slate-400">基于上方基准的常用字号对照（rem / em 数值一致）</div>
+    <div class="min-h-0 flex-1 overflow-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="sticky top-0 bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <tr>
+            <th class="px-3 py-2">px</th>
+            <th class="px-3 py-2">rem</th>
+            <th class="px-3 py-2">em</th>
+            <th class="px-3 py-2">预览</th>
+          </tr>
+        </thead>
+        <tbody id="px-rows" class="font-mono"></tbody>
+      </table>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { commonRows, pxToUnit, unitToPx } from '../../lib/convert/pxRem';
+
+  const baseEl = document.getElementById('base') as HTMLInputElement;
+  const pxIn = document.getElementById('px-in') as HTMLInputElement;
+  const unitIn = document.getElementById('unit-in') as HTMLInputElement;
+  const pxToRem = document.getElementById('px-to-rem')!;
+  const pxToEm = document.getElementById('px-to-em')!;
+  const unitToPxOut = document.getElementById('unit-to-px')!;
+  const rows = document.getElementById('px-rows')!;
+
+  function render() {
+    const base = Math.max(1, Number(baseEl.value) || 16);
+    const px = Number(pxIn.value) || 0;
+    const { rem, em } = pxToUnit(px, base);
+    pxToRem.textContent = `${rem}rem`;
+    pxToEm.textContent = `${em}em`;
+    const back = unitToPx(Number(unitIn.value) || 0, base);
+    unitToPxOut.textContent = `${Number.isFinite(back) ? back.toFixed(2).replace(/\.?0+$/, '') : '—'}px`;
+
+    rows.innerHTML = commonRows(base)
+      .map(
+        (r, i) =>
+          `<tr class="${i % 2 === 1 ? 'bg-slate-50 dark:bg-slate-800/40' : ''}">
+            <td class="px-3 py-1.5">${r.px}</td>
+            <td class="px-3 py-1.5 text-brand-600 dark:text-brand-300">${r.rem}rem</td>
+            <td class="px-3 py-1.5">${r.em}em</td>
+            <td class="px-3 py-1.5 font-sans text-slate-500 dark:text-slate-400" style="font-size:${Math.min(r.px, 28)}px">示例文字 Aa</td>
+          </tr>`
+      )
+      .join('');
+  }
+
+  [baseEl, pxIn, unitIn].forEach((el) => el.addEventListener('input', render));
+  render();
+</script>

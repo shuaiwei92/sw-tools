@@ -1,0 +1,175 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="科学计算器 · sw-tools"
+  toolName="科学计算器"
+  description="支持括号、函数（sin / cos / tan / ln / log / √…）、常量 PI / E 与历史记录，纯浏览器本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="表达式"
+  outputLabel="历史记录"
+>
+  <button slot="input-tools" id="sci-clear" class="tool-btn tool-btn-sm" title="清空输入">清空</button>
+  <button slot="input-tools" id="sci-copy" class="tool-btn tool-btn-sm" title="复制当前结果">复制结果</button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col">
+    <input
+      id="sci-expr"
+      class="calc-input m-3 mb-0 font-mono text-base"
+      spellcheck="false"
+      placeholder="输入表达式，如 sin(PI/6)+2^3"
+    />
+    <div id="sci-preview" class="mx-3 mt-2 min-h-7 font-mono text-lg font-semibold text-brand-600 dark:text-brand-300">0</div>
+    <div id="sci-keypad" class="mt-3 grid flex-1 grid-cols-5 gap-1.5 px-3 auto-rows-fr"></div>
+    <p class="mx-3 mt-2 mb-3 shrink-0 text-[11px] leading-relaxed text-slate-400">
+      提示：三角函数按弧度计算，角度可用 rad(30) 转换；^ 表示幂；% 表示取余；sqrt( 开平方。
+    </p>
+  </div>
+
+  <button slot="output-tools" id="sci-hist-clear" class="tool-btn tool-btn-sm" title="清空历史记录">清空</button>
+  <div slot="output" id="sci-history" class="zebra flex min-h-0 flex-1 flex-col overflow-y-auto p-1 text-slate-600 dark:text-slate-300"></div>
+</Tool>
+
+<script>
+  import { evaluate } from '../../lib/calc/scientific';
+
+  const exprEl = document.getElementById('sci-expr') as HTMLInputElement;
+  const previewEl = document.getElementById('sci-preview') as HTMLDivElement;
+  const keypad = document.getElementById('sci-keypad') as HTMLDivElement;
+  const historyEl = document.getElementById('sci-history') as HTMLDivElement;
+  const HKEY = 'sw-calc-sci-history-v1';
+  let history: string[] = [];
+  try {
+    history = JSON.parse(localStorage.getItem(HKEY) ?? '[]') as string[];
+    if (!Array.isArray(history)) history = [];
+  } catch {
+    history = [];
+  }
+
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(HKEY, JSON.stringify(history.slice(0, 50)));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function refreshPreview() {
+    const s = exprEl.value.trim();
+    if (!s) {
+      previewEl.textContent = '0';
+      return;
+    }
+    try {
+      const v = evaluate(s);
+      previewEl.textContent = isFinite(v) ? String(Number(v.toFixed(10))) : '∞';
+    } catch {
+      previewEl.textContent = '…';
+    }
+  }
+
+  function renderHistory() {
+    historyEl.innerHTML = history.length
+      ? history
+          .map((h, i) => `<button data-h="${i}" class="flex flex-1 shrink-0 items-center truncate rounded-md px-3 py-2 text-left font-mono text-sm hover:bg-slate-100 dark:hover:bg-slate-800" title="点击回填结果">${esc(h)}</button>`)
+          .join('')
+      : '<div class="px-1 text-xs text-slate-400">暂无记录，按「=」计算后自动保存。</div>';
+  }
+
+  const KEYS: string[][] = [
+    ['sin(', 'cos(', 'tan(', 'ln(', 'log('],
+    ['(', ')', '^', 'sqrt(', 'PI'],
+    ['7', '8', '9', '/', '⌫'],
+    ['4', '5', '6', '*', '^2'],
+    ['1', '2', '3', '-', '%'],
+    ['0', '.', 'E', '+', '='],
+  ];
+
+  function buildKeypad() {
+    keypad.innerHTML = '';
+    for (const row of KEYS) {
+      for (const k of row) {
+        const b = document.createElement('button');
+        b.textContent = k;
+        b.className = 'kp-key' + (k === '=' ? ' kp-key-eq' : '');
+        b.addEventListener('click', () => onKey(k));
+        keypad.appendChild(b);
+      }
+    }
+  }
+
+  function insert(text: string) {
+    exprEl.value += text;
+    exprEl.focus();
+    refreshPreview();
+  }
+
+  function onKey(k: string) {
+    if (k === '⌫') {
+      exprEl.value = exprEl.value.slice(0, -1);
+      exprEl.focus();
+      refreshPreview();
+      return;
+    }
+    if (k === '=') {
+      commit();
+      return;
+    }
+    insert(k);
+  }
+
+  function commit() {
+    const s = exprEl.value.trim();
+    if (!s) return;
+    try {
+      const v = evaluate(s);
+      if (!isFinite(v)) throw new Error('结果为无穷大或无效');
+      const res = String(Number(v.toFixed(10)));
+      history.unshift(`${s} = ${res}`);
+      history = history.slice(0, 50);
+      saveHistory();
+      renderHistory();
+      exprEl.value = res;
+      previewEl.textContent = res;
+    } catch {
+      previewEl.textContent = '错误';
+      previewEl.classList.add('!text-rose-500');
+      setTimeout(() => previewEl.classList.remove('!text-rose-500'), 800);
+    }
+  }
+
+  exprEl.addEventListener('input', refreshPreview);
+  document.getElementById('sci-clear')?.addEventListener('click', () => {
+    exprEl.value = '';
+    refreshPreview();
+    exprEl.focus();
+  });
+  document.getElementById('sci-copy')?.addEventListener('click', () => {
+    const t = previewEl.textContent || '';
+    if (t && t !== '0') navigator.clipboard.writeText(t).then(() => {}).catch(() => {});
+  });
+  document.getElementById('sci-hist-clear')?.addEventListener('click', () => {
+    history = [];
+    saveHistory();
+    renderHistory();
+  });
+  historyEl.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest('[data-h]') as HTMLElement | null;
+    if (!b) return;
+    const item = history[Number(b.dataset.h)] ?? '';
+    const res = item.split(' = ').pop() ?? '';
+    if (res) {
+      exprEl.value = res;
+      refreshPreview();
+    }
+  });
+
+  buildKeypad();
+  renderHistory();
+  refreshPreview();
+</script>

@@ -1,2 +1,0 @@
-FAIL: b64 no-pad true
-PASS=13 FAIL=1

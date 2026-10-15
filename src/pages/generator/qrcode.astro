@@ -1,0 +1,275 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="二维码生成 / 识别 · sw-tools"
+  toolName="二维码生成 / 识别"
+  description="二维码生成（文本 / URL / WiFi，可调容错与尺寸）与图片识别，纯浏览器本地处理不上传。"
+  categoryHref="/#generator"
+  categoryName="生成器"
+  inputLabel="生成二维码"
+  outputLabel="预览与识别"
+  columns="even"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    类型
+    <select
+      id="qr-type"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="text">文本 / URL</option>
+      <option value="wifi">WiFi 网络</option>
+    </select>
+  </label>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 文本 / URL -->
+    <div id="qr-text-pane" class="flex flex-col gap-3">
+      <div>
+        <label class="calc-label" for="qr-content">内容</label>
+        <textarea
+          id="qr-content"
+          rows="4"
+          class="calc-input font-mono text-sm"
+          placeholder="输入文本或网址…"
+        >https://sw-tools.pages.dev</textarea>
+      </div>
+    </div>
+    <!-- WiFi -->
+    <div id="qr-wifi-pane" class="hidden flex-col gap-3">
+      <div>
+        <label class="calc-label" for="wifi-ssid">网络名称（SSID）</label>
+        <input id="wifi-ssid" class="calc-input text-sm" placeholder="如 MyWiFi" />
+      </div>
+      <div>
+        <label class="calc-label" for="wifi-pass">密码</label>
+        <input id="wifi-pass" class="calc-input text-sm" placeholder="WiFi 密码" />
+      </div>
+      <label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+        <input type="checkbox" id="wifi-hidden" class="h-3.5 w-3.5 accent-brand-600" />
+        隐藏网络（不广播 SSID）
+      </label>
+      <label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+        加密方式
+        <select
+          id="wifi-enc"
+          class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+        >
+          <option value="WPA">WPA / WPA2</option>
+          <option value="WEP">WEP</option>
+          <option value="nopass">无密码</option>
+        </select>
+      </label>
+    </div>
+
+    <!-- 通用参数 -->
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="qr-level">容错级别</label>
+        <select
+          id="qr-level"
+          class="calc-input text-sm"
+        >
+          <option value="L">L（7%，默认）</option>
+          <option value="M">M（15%）</option>
+          <option value="Q">Q（25%）</option>
+          <option value="H">H（30%，最高）</option>
+        </select>
+      </div>
+      <div>
+        <label class="calc-label" for="qr-size">尺寸（px）</label>
+        <input id="qr-size" type="number" min="64" max="1024" step="32" value="320" class="calc-input text-sm" />
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="qr-dark">前景色</label>
+        <input id="qr-dark" type="color" value="#0f172a" class="h-8 w-full rounded border border-slate-200 dark:border-slate-700" />
+      </div>
+      <div>
+        <label class="calc-label" for="qr-light">背景色</label>
+        <input id="qr-light" type="color" value="#ffffff" class="h-8 w-full rounded border border-slate-200 dark:border-slate-700" />
+      </div>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 生成预览 -->
+    <div class="flex flex-col items-center gap-2 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <canvas id="qr-canvas" class="max-w-full rounded" width="320" height="320"></canvas>
+      <div class="flex gap-2">
+        <button id="qr-download" class="tool-btn tool-btn-sm" title="下载 PNG">下载 PNG</button>
+        <button id="qr-copy-data" class="tool-btn tool-btn-sm" title="复制内容">复制内容</button>
+      </div>
+    </div>
+
+    <!-- 识别 -->
+    <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <span class="calc-label">识别图片中的二维码</span>
+      <div
+        id="qr-drop"
+        class="mt-2 flex cursor-pointer flex-col items-center gap-1 rounded-lg border-2 border-dashed border-slate-200 py-6 text-sm text-slate-400 transition hover:border-brand-400 dark:border-slate-700"
+      >
+        点击或拖拽图片到此处
+        <span class="text-xs">支持 PNG / JPEG，本地解析不上传</span>
+      </div>
+      <input id="qr-file" type="file" accept="image/*" class="hidden" />
+      <div id="qr-scan-result" class="mt-2 hidden"></div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import QRCode from 'qrcode';
+  import jsQR from 'jsqr';
+
+  const canvas = document.getElementById('qr-canvas') as HTMLCanvasElement;
+  const typeSel = document.getElementById('qr-type') as HTMLSelectElement;
+  const textPane = document.getElementById('qr-text-pane')!;
+  const wifiPane = document.getElementById('qr-wifi-pane')!;
+  const content = document.getElementById('qr-content') as HTMLTextAreaElement;
+  const ssid = document.getElementById('wifi-ssid') as HTMLInputElement;
+  const pass = document.getElementById('wifi-pass') as HTMLInputElement;
+  const hidden = document.getElementById('wifi-hidden') as HTMLInputElement;
+  const enc = document.getElementById('wifi-enc') as HTMLSelectElement;
+  const level = document.getElementById('qr-level') as HTMLSelectElement;
+  const size = document.getElementById('qr-size') as HTMLInputElement;
+  const dark = document.getElementById('qr-dark') as HTMLInputElement;
+  const light = document.getElementById('qr-light') as HTMLInputElement;
+
+  function currentText(): string {
+    if (typeSel.value === 'wifi') {
+      const s = ssid.value.trim();
+      if (!s) return '';
+      const p = enc.value === 'nopass' ? '' : pass.value;
+      return `WIFI:T:${enc.value};S:${escapeWifi(s)};P:${escapeWifi(p)};${hidden.checked ? 'H:true;' : ''};`;
+    }
+    return content.value;
+  }
+
+  /** WiFi 字段转义：\ ; , : " 需反斜杠转义 */
+  function escapeWifi(s: string): string {
+    return s.replace(/([\\;,:"])/g, '\\$1');
+  }
+
+  let lastDataUrl = '';
+
+  async function render() {
+    const text = currentText();
+    if (!text) {
+      const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    const px = Math.min(1024, Math.max(64, Number(size.value) || 320));
+    canvas.width = px;
+    canvas.height = px;
+    try {
+      lastDataUrl = await QRCode.toDataURL(text, {
+        errorCorrectionLevel: level.value as 'L' | 'M' | 'Q' | 'H',
+        width: px,
+        margin: 2,
+        color: { dark: dark.value, light: light.value },
+      });
+      const img = new Image();
+      img.onload = () => {
+        const ctx = canvas.getContext('2d')!;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, px, px);
+      };
+      img.src = lastDataUrl;
+    } catch (e) {
+      const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      console.warn('QR render failed', e);
+    }
+  }
+
+  [content, ssid, pass, hidden, enc, level, size, dark, light].forEach((el) =>
+    el.addEventListener('input', render)
+  );
+  typeSel.addEventListener('change', () => {
+    textPane.classList.toggle('hidden', typeSel.value !== 'text');
+    textPane.classList.toggle('flex', typeSel.value === 'text');
+    wifiPane.classList.toggle('hidden', typeSel.value !== 'wifi');
+    wifiPane.classList.toggle('flex', typeSel.value === 'wifi');
+    render();
+  });
+
+  document.getElementById('qr-download')!.addEventListener('click', () => {
+    if (!lastDataUrl) return;
+    const a = document.createElement('a');
+    a.href = lastDataUrl;
+    a.download = 'qrcode.png';
+    a.click();
+  });
+  document.getElementById('qr-copy-data')!.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(currentText());
+    const btn = document.getElementById('qr-copy-data') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制内容'), 1200);
+  });
+
+  /* ---------- 识别 ---------- */
+  const drop = document.getElementById('qr-drop')!;
+  const fileInput = document.getElementById('qr-file') as HTMLInputElement;
+  const scanResult = document.getElementById('qr-scan-result')!;
+
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('border-brand-400');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('border-brand-400'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('border-brand-400');
+    const f = (e as DragEvent).dataTransfer?.files?.[0];
+    if (f) scanFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files?.[0];
+    if (f) scanFile(f);
+  });
+
+  async function scanFile(file: File) {
+    const bitmap = await createImageBitmap(file);
+    const c = document.createElement('canvas');
+    c.width = bitmap.width;
+    c.height = bitmap.height;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(bitmap, 0, 0);
+    const imgData = ctx.getImageData(0, 0, c.width, c.height);
+    const result = jsQR(imgData.data, c.width, c.height, { inversionAttempts: 'attemptBoth' });
+    scanResult.classList.remove('hidden');
+    if (result) {
+      scanResult.innerHTML = `
+        <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/30">
+          <div class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">识别成功</div>
+          <div class="mt-1 break-all font-mono text-sm text-slate-700 dark:text-slate-200">${escapeHtml(result.data)}</div>
+          <div class="mt-2 flex gap-2">
+            <button id="scan-copy" class="tool-btn tool-btn-sm">复制</button>
+            <button id="scan-open" class="tool-btn tool-btn-sm ${/^https?:\/\//.test(result.data) ? '' : 'hidden'}">打开链接</button>
+          </div>
+        </div>`;
+      document.getElementById('scan-copy')!.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(result.data);
+        (document.getElementById('scan-copy') as HTMLButtonElement).textContent = '已复制';
+      });
+      const openBtn = document.getElementById('scan-open');
+      openBtn?.addEventListener('click', () => window.open(result.data, '_blank'));
+    } else {
+      scanResult.innerHTML = `
+        <div class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-600 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-400">
+          未识别到二维码，请换一张更清晰的图片试试。
+        </div>`;
+    }
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => `&${({ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": 'apos' } as Record<string, string>)[c]};`);
+  }
+
+  render();
+</script>

@@ -1,0 +1,166 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { HTTP_HEADERS, HTTP_METHODS, HTTP_STATUS } from '../../lib/network/httpRef';
+---
+
+<Tool
+  title="HTTP 参考表 · sw-tools"
+  toolName="HTTP 参考表"
+  description="HTTP 状态码、请求方法与常用请求/响应头速查：按类别筛选、关键词搜索，纯本地数据。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="检索"
+  outputLabel="速查表"
+  columns="left-narrow"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    表格
+    <select
+      id="http-switch"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="status">状态码</option>
+      <option value="methods">请求方法</option>
+      <option value="headers">常用 Header</option>
+    </select>
+  </label>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="q">搜索（代码 / 名称 / 描述）</label>
+      <input id="q" class="calc-input text-sm" placeholder="如 404、缓存、CORS…" spellcheck="false" />
+    </div>
+    <div id="http-cats" class="flex flex-wrap gap-1.5"></div>
+    <div class="text-xs leading-relaxed text-slate-400">
+      <p class="mb-1 font-semibold text-slate-500 dark:text-slate-400">说明</p>
+      <p>· 状态码按 1xx ~ 5xx 分类筛选</p>
+      <p>· Header 表收录请求与响应常用字段及 CORS / 缓存 / 安全相关头</p>
+      <p>· 数据本地内置，无网络请求</p>
+    </div>
+  </div>
+
+  <span slot="output-tools" id="http-count" class="text-xs text-slate-400"></span>
+
+  <div slot="output" class="min-h-0 flex-1 overflow-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="sticky top-0 bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <tr>
+          <th class="px-3 py-2" id="http-col1">状态码</th>
+          <th class="px-3 py-2" id="http-col2">名称</th>
+          <th class="px-3 py-2">说明</th>
+        </tr>
+      </thead>
+      <tbody id="http-body" class="align-top"></tbody>
+    </table>
+    <!-- 数据岛：速查数据经 JSON 注入，避免 define:vars 导致脚本不打包 -->
+    <script
+      type="application/json"
+      id="http-data"
+      set:html={JSON.stringify({ status: HTTP_STATUS, methods: HTTP_METHODS, headers: HTTP_HEADERS }).replace(/</g, '\\u003c')}
+    ></script>
+  </div>
+</Tool>
+
+<script>
+  interface StatusEntry { code: number; name: string; desc: string }
+  interface MethodEntry { name: string; desc: string }
+  interface HeaderEntry { name: string; desc: string }
+
+  const dataEl = document.getElementById('http-data');
+  const DATA = JSON.parse(dataEl?.textContent ?? '{}') as {
+    status: StatusEntry[];
+    methods: MethodEntry[];
+    headers: HeaderEntry[];
+  };
+  const HTTP_STATUS: StatusEntry[] = DATA.status ?? [];
+  const HTTP_METHODS: MethodEntry[] = DATA.methods ?? [];
+  const HTTP_HEADERS: HeaderEntry[] = DATA.headers ?? [];
+
+  const body = document.getElementById('http-body')!;
+  const count = document.getElementById('http-count')!;
+  const q = document.getElementById('q') as HTMLInputElement;
+  const sw = document.getElementById('http-switch') as HTMLSelectElement;
+  const cats = document.getElementById('http-cats')!;
+  const col1 = document.getElementById('http-col1')!;
+  const col2 = document.getElementById('http-col2')!;
+
+  let activeCat = '';
+
+  interface Row {
+    cat: string;
+    c1: string;
+    c2: string;
+    desc: string;
+  }
+
+  function rows(): Row[] {
+    if (sw.value === 'status') {
+      return HTTP_STATUS.map((s) => ({
+        cat: `${Math.floor(s.code / 100)}xx`,
+        c1: String(s.code),
+        c2: s.name,
+        desc: s.desc,
+      }));
+    }
+    if (sw.value === 'methods') {
+      return HTTP_METHODS.map((m) => ({ cat: '方法', c1: m.name, c2: '', desc: m.desc }));
+    }
+    return HTTP_HEADERS.map((h) => ({ cat: h.name.includes('Access-Control') ? 'CORS' : h.name.startsWith('X-') || h.name.startsWith('Strict') || h.name.startsWith('Content-Security') ? '安全' : '通用', c1: h.name, c2: '', desc: h.desc }));
+  }
+
+  function esc(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => `&${({ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": 'apos' } as Record<string, string>)[c]};`);
+  }
+
+  function render() {
+    const all = rows();
+    const catList = [...new Set(all.map((r) => r.cat))];
+    if (activeCat && !catList.includes(activeCat)) activeCat = '';
+    cats.innerHTML = catList
+      .map(
+        (c) =>
+          `<button class="http-cat rounded-md border px-2 py-0.5 text-xs transition ${
+            c === activeCat
+              ? 'border-brand-600 bg-brand-600 text-white'
+              : 'border-slate-200 text-slate-500 hover:border-brand-400 dark:border-slate-700'
+          }" data-cat="${c}">${c}</button>`
+      )
+      .join('');
+    cats.querySelectorAll<HTMLButtonElement>('.http-cat').forEach((b) =>
+      b.addEventListener('click', () => {
+        activeCat = activeCat === b.dataset.cat ? '' : b.dataset.cat!;
+        render();
+      })
+    );
+
+    const f = q.value.trim().toLowerCase();
+    const list = all.filter(
+      (r) =>
+        (!activeCat || r.cat === activeCat) &&
+        (!f || r.c1.toLowerCase().includes(f) || r.c2.toLowerCase().includes(f) || r.desc.toLowerCase().includes(f))
+    );
+
+    col1.textContent = sw.value === 'status' ? '状态码' : sw.value === 'methods' ? '方法' : 'Header';
+    col2.textContent = sw.value === 'status' ? '名称' : '类别';
+
+    body.innerHTML = list
+      .map(
+        (r, i) =>
+          `<tr class="${i % 2 === 1 ? 'bg-slate-50 dark:bg-slate-800/40' : ''}">
+            <td class="px-3 py-1.5 font-mono font-semibold">${esc(r.c1)}</td>
+            <td class="px-3 py-1.5 font-mono text-slate-500 dark:text-slate-400">${esc(sw.value === 'status' ? r.c2 : r.cat)}</td>
+            <td class="px-3 py-1.5 text-slate-600 dark:text-slate-300">${esc(r.desc)}</td>
+          </tr>`
+      )
+      .join('');
+    count.textContent = `共 ${list.length} 条`;
+  }
+
+  q.addEventListener('input', render);
+  sw.addEventListener('change', () => {
+    activeCat = '';
+    render();
+  });
+
+  render();
+</script>

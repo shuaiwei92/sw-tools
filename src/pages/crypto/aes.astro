@@ -1,0 +1,117 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="AES 加解密 · sw-tools"
+  toolName="AES 加解密"
+  description="AES-256-GCM / CBC 加解密，PBKDF2 从口令派生密钥，密文 Base64，全部本地计算不上传。"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+  inputLabel="输入"
+  outputLabel="输出"
+>
+  <button slot="input-tools" id="aes-enc" class="tool-btn tool-btn-sm" title="加密输入内容">加密 →</button>
+  <button slot="input-tools" id="aes-dec" class="tool-btn tool-btn-sm" title="解密输入内容">← 解密</button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col">
+    <div class="shrink-0 space-y-3 border-b border-slate-200 p-3 dark:border-slate-700">
+      <div>
+        <label class="calc-label" for="aes-pass">加密 / 解密口令</label>
+        <input id="aes-pass" type="text" class="calc-input font-mono" placeholder="输入口令（用于 PBKDF2 派生密钥）" />
+      </div>
+      <div>
+        <span class="calc-label">模式</span>
+        <div id="aes-modes" class="seg"></div>
+      </div>
+    </div>
+    <textarea
+      id="aes-input"
+      class="min-h-[12rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+      placeholder="在此输入明文或 Base64 密文…"
+    ></textarea>
+  </div>
+
+  <button slot="output-tools" id="aes-copy" class="tool-btn tool-btn-sm" title="复制输出结果">复制结果</button>
+  <button slot="output-tools" id="aes-swap" class="tool-btn tool-btn-sm" title="把输出结果填入输入框">结果填入输入</button>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col">
+    <div
+      id="aes-output"
+      class="min-h-[8rem] flex-1 overflow-y-auto whitespace-pre-wrap break-all p-3 font-mono text-sm text-slate-800 lg:min-h-0 dark:text-slate-100"
+    >结果将显示在此…</div>
+    <p class="shrink-0 border-t border-slate-200 p-3 text-xs leading-relaxed text-slate-400 dark:border-slate-700">
+      说明：PBKDF2（SHA-256，15 万次迭代）从口令派生 256 位密钥；GCM 为认证加密（推荐，自带完整性校验），CBC
+      为传统分组模式。密文格式 = Base64( salt[16] + iv[12|16] + 密文 )，加解密两侧需选择相同模式。
+    </p>
+  </div>
+</Tool>
+
+<script>
+  import { aesEncrypt, aesDecrypt, type AesMode } from '../../lib/crypto/aes';
+
+  const passEl = document.getElementById('aes-pass') as HTMLInputElement;
+  const inputEl = document.getElementById('aes-input') as HTMLTextAreaElement;
+  const outputEl = document.getElementById('aes-output') as HTMLDivElement;
+  const modesEl = document.getElementById('aes-modes') as HTMLDivElement;
+
+  const MODES: { id: AesMode; label: string }[] = [
+    { id: 'GCM', label: 'AES-256-GCM' },
+    { id: 'CBC', label: 'AES-256-CBC' },
+  ];
+  let current: AesMode = 'GCM';
+
+  function buildModes() {
+    modesEl.innerHTML = '';
+    for (const m of MODES) {
+      const btn = document.createElement('button');
+      btn.textContent = m.label;
+      if (m.id === current) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        current = m.id;
+        buildModes();
+      });
+      modesEl.appendChild(btn);
+    }
+  }
+
+  function show(text: string, ok = true) {
+    outputEl.textContent = text;
+    outputEl.classList.toggle('text-rose-600', !ok);
+    outputEl.classList.toggle('dark:text-rose-400', !ok);
+    outputEl.classList.toggle('text-slate-800', ok);
+    outputEl.classList.toggle('dark:text-slate-100', ok);
+  }
+
+  async function run(dir: 'encrypt' | 'decrypt') {
+    const pass = passEl.value;
+    const input = inputEl.value;
+    if (!pass) return show('请输入口令', false);
+    if (!input.trim()) return show('请输入内容', false);
+    show('计算中…');
+    try {
+      const r =
+        dir === 'encrypt' ? await aesEncrypt(input, pass, current) : await aesDecrypt(input, pass, current);
+      show(r);
+    } catch (e) {
+      show('✗ ' + (e as Error).message, false);
+    }
+  }
+
+  document.getElementById('aes-enc')?.addEventListener('click', () => void run('encrypt'));
+  document.getElementById('aes-dec')?.addEventListener('click', () => void run('decrypt'));
+  document.getElementById('aes-copy')?.addEventListener('click', async () => {
+    const t = outputEl.textContent ?? '';
+    if (!t || t === '结果将显示在此…') return;
+    await navigator.clipboard.writeText(t);
+    show('已复制到剪贴板');
+  });
+  document.getElementById('aes-swap')?.addEventListener('click', () => {
+    const t = outputEl.textContent ?? '';
+    if (!t || t === '结果将显示在此…') return;
+    inputEl.value = t;
+    show('已填入输入框');
+  });
+
+  buildModes();
+</script>

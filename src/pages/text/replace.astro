@@ -1,0 +1,115 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="查找替换 · sw-tools"
+  description="批量查找替换，支持正则表达式、全局与忽略大小写，纯浏览器本地处理。"
+  toolName="查找替换"
+  categoryHref="/#text"
+  categoryName="文本处理"
+  inputLabel="原文"
+  outputLabel="替换结果"
+>
+  <button slot="input-tools" id="rp-clear" class="tool-btn tool-btn-sm" title="清空输入">清空</button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col">
+    <div class="shrink-0 space-y-2 border-b border-slate-200 p-3 dark:border-slate-700">
+      <div class="grid gap-2 sm:grid-cols-2">
+        <div>
+          <label class="calc-label" for="find">查找内容</label>
+          <input id="find" class="calc-input font-mono text-xs" placeholder="要查找的字符串或正则" />
+        </div>
+        <div>
+          <label class="calc-label" for="repl">替换为</label>
+          <input id="repl" class="calc-input font-mono text-xs" placeholder="替换内容（正则可用 $1 引用分组）" />
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-4">
+        <label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+          <input type="checkbox" id="opt-regex" class="accent-brand-600" />
+          正则表达式
+        </label>
+        <label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+          <input type="checkbox" id="opt-global" class="accent-brand-600" checked />
+          全部替换
+        </label>
+        <label class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+          <input type="checkbox" id="opt-icase" class="accent-brand-600" />
+          忽略大小写
+        </label>
+      </div>
+    </div>
+    <textarea
+      id="src"
+      class="min-h-[14rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+      placeholder="在此粘贴需要处理的文本…"
+      spellcheck="false"
+    ></textarea>
+  </div>
+
+  <span slot="output-tools" id="count" class="ml-auto text-xs text-slate-400"></span>
+  <button slot="output-tools" id="copy" class="tool-btn tool-btn-sm" title="复制结果">复制结果</button>
+
+  <textarea
+    slot="output"
+    id="out"
+    readonly
+    class="min-h-[14rem] w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm leading-relaxed outline-none lg:min-h-0"
+    placeholder="替换结果将显示在这里…"
+  ></textarea>
+</Tool>
+
+<script>
+  import { replaceAll } from '../../lib/text/replace';
+
+  const src = document.getElementById('src') as HTMLTextAreaElement;
+  const find = document.getElementById('find') as HTMLInputElement;
+  const repl = document.getElementById('repl') as HTMLInputElement;
+  const optRegex = document.getElementById('opt-regex') as HTMLInputElement;
+  const optGlobal = document.getElementById('opt-global') as HTMLInputElement;
+  const optIcase = document.getElementById('opt-icase') as HTMLInputElement;
+  const out = document.getElementById('out') as HTMLTextAreaElement;
+  const count = document.getElementById('count')!;
+
+  function run() {
+    try {
+      const { result, count: n } = replaceAll(src.value, {
+        pattern: find.value,
+        replacement: repl.value,
+        regex: optRegex.checked,
+        global: optGlobal.checked,
+        ignoreCase: optIcase.checked,
+      });
+      out.value = result;
+      count.textContent = n ? `共替换 ${n} 处` : '未找到匹配内容';
+      count.className = n ? 'ml-auto text-xs text-emerald-600 dark:text-emerald-400' : 'ml-auto text-xs text-amber-600 dark:text-amber-400';
+    } catch (e) {
+      out.value = '';
+      count.textContent = (e as Error).message;
+      count.className = 'ml-auto text-xs text-rose-600 dark:text-rose-400';
+    }
+  }
+
+  document.getElementById('copy')!.addEventListener('click', async () => {
+    if (!out.value) return;
+    await navigator.clipboard.writeText(out.value);
+    const btn = document.getElementById('copy') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制结果'), 1200);
+  });
+  document.getElementById('rp-clear')?.addEventListener('click', () => {
+    src.value = '';
+    src.focus();
+    run();
+  });
+  // 输入即时刷新（防抖 200ms）
+  let timer: number | undefined;
+  [src, find, repl].forEach((el) =>
+    el.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(run, 200);
+    })
+  );
+  [optRegex, optGlobal, optIcase].forEach((el) => el.addEventListener('change', run));
+</script>

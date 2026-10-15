@@ -1,0 +1,240 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { EXTRACT_GROUPS, type ExtractGroupId } from '../../lib/text/extract';
+
+const SAMPLE = `联系人：张三 <zhangsan@example.com>，李四 <lisi.s+tag@company.cn>。
+备用邮箱 backup_01@mail.co.uk，客服 support@sw-tools.cn。
+
+参考文档 https://example.com/docs?id=123 与 http://test.org:8080/a/b?q=1，
+镜像站点 https://mirror.example.net/path/page.html。
+
+联系电话 13812345678、010-12345678，服务器地址 192.168.1.1 与 8.8.8.8。
+项目启动会 2026-10-14 09:30，截止 2026/11/01，里程碑 2027.01.31。
+本季度处理订单 1024 笔，金额 56789.5 元，汇率 0.85，编号 NO.20261014-007。`;
+---
+
+<Tool
+  title="信息提取 · sw-tools"
+  description="从文本中自选提取邮箱、URL、手机号、IP、日期、数字，分类展示并可逐类或单条复制。"
+  toolName="信息提取"
+  categoryHref="/#text"
+  categoryName="文本处理"
+  inputLabel="原文"
+  outputLabel="提取结果"
+>
+  <label slot="input-tools" class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+    <input type="checkbox" id="dedup" class="accent-brand-600" checked />
+    去重（保留首次出现）
+  </label>
+  <button slot="input-tools" id="load-sample" class="tool-btn tool-btn-sm" title="填入示例文本" data-sample={SAMPLE}>示例</button>
+  <button slot="input-tools" id="clear-src" class="tool-btn tool-btn-sm" title="清空原文">清空</button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col">
+    <textarea
+      id="src"
+      class="min-h-[10rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+      spellcheck="false"
+      placeholder="粘贴包含邮箱 / 链接 / 手机号 / IP / 日期 / 数字的文本…"
+    ></textarea>
+
+    <!-- 提取类型：用户自选，选择结果本地记忆 -->
+    <div class="shrink-0 border-t border-slate-200 p-3 dark:border-slate-700">
+      <div class="flex items-center justify-between">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">提取类型（点击开关）</span>
+        <div class="flex gap-2 text-xs">
+          <button id="sel-all" class="text-slate-400 transition hover:text-brand-600">全选</button>
+          <button id="sel-none" class="text-slate-400 transition hover:text-brand-600">清空</button>
+        </div>
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-1.5" id="type-toggles">
+        {EXTRACT_GROUPS.map((g) => (
+          <button
+            class:list={['type-toggle', 'active']}
+            data-type={g.id}
+            title={g.hint}
+          >
+            <span class="dot"></span>
+            <span class="flex-1 text-left">{g.label}</span>
+            <span class="count" data-count>0</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <span slot="output-tools" id="total" class="ml-auto text-xs text-slate-400"></span>
+  <button slot="output-tools" id="copy-all" class="tool-btn tool-btn-sm" title="复制所有已选类型的提取结果">复制全部</button>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <!-- 卡片行数随选中类型数量自适应：auto-rows 均分剩余高度，内容超出卡内滚动 -->
+    <div class="grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] grid-cols-1 gap-3 p-3 sm:grid-cols-2" id="result-grid">
+      {EXTRACT_GROUPS.map((g) => (
+        <div
+          class="flex min-h-0 flex-col rounded-xl border border-slate-200 p-3 dark:border-slate-700"
+          data-group={g.id}
+        >
+          <div class="flex shrink-0 items-center justify-between">
+            <span class="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300"
+              ><span class="dot"></span>{g.label}</span
+            >
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400" data-count>0 项</span>
+              <button class="tool-btn tool-btn-sm" data-copy title={`复制全部${g.label}`}>复制</button>
+            </div>
+          </div>
+          <div class="mt-2 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto font-mono text-sm" data-list>
+            <span class="m-auto text-slate-300 dark:text-slate-600">（暂无）</span>
+          </div>
+        </div>
+      ))}
+    </div>
+    <p id="empty-hint" class="m-auto hidden p-6 text-sm text-slate-400">在左侧「提取类型」中至少选择一种</p>
+  </div>
+</Tool>
+
+<script>
+  import { EXTRACT_GROUPS, extractSelected, type ExtractGroupId } from '../../lib/text/extract';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const src = $<HTMLTextAreaElement>('src');
+  const dedup = $<HTMLInputElement>('dedup');
+  const totalEl = $('total');
+  const copyAllBtn = $<HTMLButtonElement>('copy-all');
+  const emptyHint = $('empty-hint');
+  const grid = $('result-grid');
+
+  const LS_KEY = 'sw-tools:extract:types';
+
+  /** 读取本地记忆的选中类型；无记录时默认全选 */
+  function loadSelected(): Set<ExtractGroupId> {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw !== null) {
+        const arr = JSON.parse(raw) as ExtractGroupId[];
+        return new Set(arr.filter((id) => EXTRACT_GROUPS.some((g) => g.id === id)));
+      }
+    } catch {
+      /* 忽略损坏的本地数据 */
+    }
+    return new Set(EXTRACT_GROUPS.map((g) => g.id));
+  }
+
+  const selected = loadSelected();
+
+  const esc = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+
+  function persist() {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify([...selected]));
+    } catch {
+      /* 隐私模式等场景下静默失败 */
+    }
+  }
+
+  let lastResult = {} as Record<ExtractGroupId, string[]>;
+
+  function render() {
+    const picked = EXTRACT_GROUPS.filter((g) => selected.has(g.id)).map((g) => g.id);
+    const raw = extractSelected(src.value, picked, dedup.checked);
+    lastResult = raw;
+
+    // 右侧卡片：仅已选类型可见
+    let total = 0;
+    let anyCard = false;
+    for (const g of EXTRACT_GROUPS) {
+      const items = raw[g.id];
+      const card = document.querySelector<HTMLElement>(`[data-group="${g.id}"]`)!;
+      const on = selected.has(g.id);
+      card.classList.toggle('result-card-off', !on);
+      if (on) anyCard = true;
+      const countEl = card.querySelector('[data-count]')!;
+      const listEl = card.querySelector('[data-list]')!;
+      const copyBtn = card.querySelector<HTMLButtonElement>('[data-copy]')!;
+      countEl.textContent = `${items.length} 项`;
+      total += items.length;
+      listEl.innerHTML = items.length
+        ? items.map((v) => `<span class="x-item" title="点击复制">${esc(v)}</span>`).join('')
+        : '<span class="m-auto text-slate-300 dark:text-slate-600">（暂无）</span>';
+      copyBtn.onclick = async () => {
+        if (!items.length) return;
+        await navigator.clipboard.writeText(items.join('\n'));
+        copyBtn.textContent = '已复制';
+        setTimeout(() => (copyBtn.textContent = '复制'), 1200);
+      };
+    }
+
+    // 左侧开关上的计数徽标
+    for (const g of EXTRACT_GROUPS) {
+      const toggle = document.querySelector<HTMLElement>(`#type-toggles [data-type="${g.id}"]`)!;
+      toggle.classList.toggle('active', selected.has(g.id));
+      const badge = toggle.querySelector('[data-count]')!;
+      badge.textContent = String(raw[g.id].length);
+    }
+
+    totalEl.textContent = total ? `共提取到 ${total} 项` : '';
+    emptyHint.classList.toggle('hidden', anyCard);
+    grid.classList.toggle('hidden', !anyCard);
+    copyAllBtn.disabled = total === 0;
+    copyAllBtn.classList.toggle('opacity-40', total === 0);
+  }
+
+  // 类型开关
+  document.querySelectorAll<HTMLButtonElement>('#type-toggles .type-toggle').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.type as ExtractGroupId;
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      persist();
+      render();
+    });
+  });
+
+  $('sel-all').addEventListener('click', () => {
+    EXTRACT_GROUPS.forEach((g) => selected.add(g.id));
+    persist();
+    render();
+  });
+  $('sel-none').addEventListener('click', () => {
+    selected.clear();
+    persist();
+    render();
+  });
+
+  // 单条复制（事件委托）
+  grid.addEventListener('click', async (e) => {
+    const chip = (e.target as HTMLElement).closest('.x-item');
+    if (!chip) return;
+    const text = chip.textContent ?? '';
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    const old = chip.title;
+    chip.title = '已复制';
+    setTimeout(() => (chip.title = old), 1000);
+  });
+
+  copyAllBtn.addEventListener('click', async () => {
+    const picked = EXTRACT_GROUPS.filter((g) => selected.has(g.id));
+    const lines = picked.flatMap((g) => lastResult[g.id]);
+    if (!lines.length) return;
+    await navigator.clipboard.writeText(lines.join('\n'));
+    copyAllBtn.textContent = '已复制';
+    setTimeout(() => (copyAllBtn.textContent = '复制全部'), 1200);
+  });
+
+  $('load-sample').addEventListener('click', () => {
+    src.value = ($('load-sample') as HTMLElement).dataset.sample ?? '';
+    render();
+  });
+  $('clear-src').addEventListener('click', () => {
+    src.value = '';
+    render();
+  });
+
+  src.addEventListener('input', render);
+  dedup.addEventListener('change', render);
+
+  // 初始：无内容时填入示例，便于直接看到效果
+  if (!src.value) src.value = ($('load-sample') as HTMLElement).dataset.sample ?? '';
+  render();
+</script>

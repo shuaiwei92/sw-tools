@@ -1,0 +1,218 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+<Tool
+  title="CSV 编辑器 · sw-tools"
+  toolName="CSV 编辑器"
+  description="粘贴 / 解析 CSV，在线编辑表格，导出 CSV / JSON / Markdown；兼容引号转义与引号内换行。"
+  categoryHref="/#data"
+  categoryName="数据工具"
+  inputLabel="原始 CSV"
+  outputLabel="可编辑表格"
+  columns="left-wide"
+>
+  <div slot="input-tools" class="flex flex-wrap items-center gap-1.5">
+    <button id="parse-btn" class="tool-btn tool-btn-sm" title="解析为表格">解析</button>
+    <button id="sample-btn" class="tool-btn tool-btn-sm" title="载入示例">示例</button>
+  </div>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-2 p-3">
+    <div class="flex flex-wrap items-center gap-3 text-xs">
+      <label class="flex items-center gap-1">
+        分隔符
+        <select id="delim" class="calc-input py-1">
+          <option value="auto">自动</option>
+          <option value=",">逗号 ,</option>
+          <option value=";">分号 ;</option>
+          <option value="&#9;">制表符 Tab</option>
+          <option value="|">竖线 |</option>
+        </select>
+      </label>
+      <label class="flex items-center gap-1">
+        <input type="checkbox" id="has-header" checked /> 首行作表头
+      </label>
+    </div>
+    <textarea
+      id="csv-input"
+      class="min-h-0 flex-1 resize-none rounded-lg border border-slate-300 bg-white p-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+      spellcheck="false"
+      placeholder="在此粘贴 CSV 文本…"
+    ></textarea>
+    <p class="text-[11px] leading-relaxed text-slate-400">支持 BOM 剥离、自动识别分隔符、引号转义（""）与引号内换行。解析后可在右侧直接编辑单元格。</p>
+  </div>
+
+  <div slot="output-tools" class="flex flex-wrap items-center gap-1.5">
+    <button id="add-row" class="tool-btn tool-btn-sm" title="新增一行">＋ 行</button>
+    <button id="add-col" class="tool-btn tool-btn-sm" title="新增一列">＋ 列</button>
+    <button id="del-row" class="tool-btn tool-btn-sm" title="删除末行">－ 行</button>
+    <button id="del-col" class="tool-btn tool-btn-sm" title="删除末列">－ 列</button>
+    <span class="mx-1 h-4 w-px bg-slate-300 dark:bg-slate-600"></span>
+    <button id="exp-csv" class="tool-btn tool-btn-sm" title="下载为 .csv">导出 CSV</button>
+    <button id="exp-json" class="tool-btn tool-btn-sm" title="下载为 .json">导出 JSON</button>
+    <button id="exp-md" class="tool-btn tool-btn-sm" title="下载为 .md">导出 MD</button>
+    <button id="copy-csv" class="tool-btn tool-btn-sm" title="复制 CSV">复制 CSV</button>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col p-3">
+    <p id="status" class="mb-2 text-xs text-slate-400">&nbsp;</p>
+    <div id="table-wrap" class="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      <p class="p-6 text-center text-sm text-slate-400">在左侧粘贴 CSV 并点击「解析」</p>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import {
+    parseCsv,
+    serializeCsv,
+    csvToObjects,
+    csvToMarkdown,
+    type CsvTable,
+    type Delimiter,
+  } from '../../lib/data/csv';
+
+  const SAMPLE = 'name,age,city\nAlice,30,Beijing\nBob,25,"New York"\n"Chen, Wei",28,Shanghai';
+
+  const input = document.getElementById('csv-input') as HTMLTextAreaElement;
+  const delimSel = document.getElementById('delim') as HTMLSelectElement;
+  const headerChk = document.getElementById('has-header') as HTMLInputElement;
+  const wrap = document.getElementById('table-wrap') as HTMLDivElement;
+  const status = document.getElementById('status') as HTMLParagraphElement;
+
+  let state: CsvTable | null = null;
+  let effectiveDelim = ',';
+
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  function setStatus(msg: string) {
+    status.textContent = msg || ' ';
+  }
+
+  function render() {
+    if (!state) {
+      wrap.innerHTML = '<p class="p-6 text-center text-sm text-slate-400">在左侧粘贴 CSV 并点击「解析」</p>';
+      return;
+    }
+    let html = '<table class="w-full border-collapse text-sm"><thead><tr>';
+    state.headers.forEach((h, i) => {
+      html += `<th class="sticky top-0 border border-slate-200 bg-slate-100 px-2 py-1 text-left font-semibold dark:border-slate-700 dark:bg-slate-800" contenteditable="true" data-r="-1" data-c="${i}">${esc(h)}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+    state.rows.forEach((row, ri) => {
+      html += '<tr>';
+      state.headers.forEach((_, ci) => {
+        html += `<td class="border border-slate-200 px-2 py-1 align-top dark:border-slate-700" contenteditable="true" data-r="${ri}" data-c="${ci}">${esc(row[ci] ?? '')}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function doParse() {
+    const text = input.value;
+    if (!text.trim()) {
+      state = null;
+      render();
+      setStatus('请输入 CSV 文本');
+      return;
+    }
+    const opts = {
+      delimiter: delimSel.value === 'auto' ? undefined : (delimSel.value as Delimiter),
+      hasHeader: headerChk.checked,
+    };
+    try {
+      state = parseCsv(text, opts);
+      effectiveDelim = opts.delimiter ?? (state.headers.length ? ',' : ',');
+      effectiveDelim = delimSel.value === 'auto' ? ',' : delimSel.value;
+      render();
+      setStatus(`已解析：${state.headers.length} 列 × ${state.rows.length} 行`);
+    } catch (e) {
+      setStatus('✗ ' + (e as Error).message);
+    }
+  }
+
+  function download(filename: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  wrap.addEventListener('input', (e) => {
+    if (!state) return;
+    const t = e.target as HTMLElement;
+    if (t.dataset.r === undefined) return;
+    const r = Number(t.dataset.r);
+    const c = Number(t.dataset.c);
+    const v = t.textContent ?? '';
+    if (r === -1) state.headers[c] = v;
+    else state.rows[r][c] = v;
+  });
+
+  document.getElementById('parse-btn')!.addEventListener('click', doParse);
+  document.getElementById('sample-btn')!.addEventListener('click', () => {
+    input.value = SAMPLE;
+    doParse();
+  });
+  document.getElementById('add-row')!.addEventListener('click', () => {
+    if (!state) return;
+    state.rows.push(new Array(state.headers.length).fill(''));
+    render();
+    setStatus(`已新增行，共 ${state.rows.length} 行`);
+  });
+  document.getElementById('add-col')!.addEventListener('click', () => {
+    if (!state) return;
+    state.headers.push(`列${state.headers.length + 1}`);
+    state.rows.forEach((r) => r.push(''));
+    render();
+    setStatus(`已新增列，共 ${state.headers.length} 列`);
+  });
+  document.getElementById('del-row')!.addEventListener('click', () => {
+    if (!state || !state.rows.length) return;
+    state.rows.pop();
+    render();
+    setStatus(`已删除末行，剩 ${state.rows.length} 行`);
+  });
+  document.getElementById('del-col')!.addEventListener('click', () => {
+    if (!state || state.headers.length <= 1) return;
+    state.headers.pop();
+    state.rows.forEach((r) => r.pop());
+    render();
+    setStatus(`已删除末列，剩 ${state.headers.length} 列`);
+  });
+  document.getElementById('exp-csv')!.addEventListener('click', () => {
+    if (!state) return;
+    const csv = serializeCsv(state.headers, state.rows, effectiveDelim);
+    download('table.csv', csv, 'text/csv;charset=utf-8');
+    setStatus('已导出 CSV');
+  });
+  document.getElementById('exp-json')!.addEventListener('click', () => {
+    if (!state) return;
+    const json = JSON.stringify(csvToObjects(state.headers, state.rows, { coerce: false }), null, 2);
+    download('table.json', json, 'application/json');
+    setStatus('已导出 JSON（保留原始字符串，不推断类型）');
+  });
+  document.getElementById('exp-md')!.addEventListener('click', () => {
+    if (!state) return;
+    download('table.md', csvToMarkdown(state.headers, state.rows), 'text/markdown');
+    setStatus('已导出 Markdown 表格');
+  });
+  document.getElementById('copy-csv')!.addEventListener('click', async () => {
+    if (!state) return;
+    try {
+      await navigator.clipboard.writeText(serializeCsv(state.headers, state.rows, effectiveDelim));
+      setStatus('已复制 CSV 到剪贴板');
+    } catch {
+      setStatus('复制失败：浏览器拒绝了剪贴板权限');
+    }
+  });
+
+  // 初始载入示例，便于立即体验
+  input.value = SAMPLE;
+  doParse();
+</script>

@@ -1,0 +1,256 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+const SAMPLE_A = `{
+  "name": "sw-tools",
+  "version": "1.4.0",
+  "stars": 128,
+  "tags": ["json", "diff"],
+  "author": { "name": "sw", "email": "sw@example.com" },
+  "private": false
+}`;
+
+const SAMPLE_B = `{
+  "name": "sw-tools",
+  "version": "1.5.0",
+  "stars": 256,
+  "tags": ["json", "diff", "compare"],
+  "author": { "name": "sw", "email": "hi@example.com" },
+  "license": "MIT"
+}`;
+---
+
+<Tool
+  title="JSON 差异对比 · sw-tools"
+  toolName="JSON 差异对比"
+  description="递归对比两个 JSON 的结构与值：新增 / 删除 / 修改 / 未变化分组展示，数组支持按索引或按 id 匹配。"
+  categoryHref="/#json"
+  categoryName="JSON 工具"
+  inputLabel="待对比 JSON"
+  outputLabel="差异结果"
+  columns="even"
+>
+  <!-- 左：两份 JSON -->
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div class="flex min-h-0 flex-1 flex-col">
+      <div class="flex items-center justify-between">
+        <span class="calc-label mb-0">原始 JSON（A）</span>
+        <span class="flex gap-1">
+          <button class="tool-btn tool-btn-sm" id="btn-sample" data-a={SAMPLE_A} data-b={SAMPLE_B} title="载入一组有差异的示例"><Icon name="sample" /></button>
+          <button class="tool-btn tool-btn-sm" id="btn-swap" title="交换 A / B 内容"><Icon name="swap" /></button>
+          <button class="tool-btn tool-btn-sm" id="btn-clear" title="清空两侧"><Icon name="trash" /></button>
+        </span>
+      </div>
+      <textarea
+        id="ta-a"
+        spellcheck="false"
+        placeholder="在此粘贴原始 JSON…"
+        class="calc-input mt-1 min-h-[8rem] flex-1 resize-none font-mono text-sm leading-relaxed">{SAMPLE_A}</textarea
+      >
+    </div>
+    <div class="flex min-h-0 flex-1 flex-col">
+      <span class="calc-label mb-0">修改后 JSON（B）</span>
+      <textarea
+        id="ta-b"
+        spellcheck="false"
+        placeholder="在此粘贴修改后的 JSON…"
+        class="calc-input mt-1 min-h-[8rem] flex-1 resize-none font-mono text-sm leading-relaxed">{SAMPLE_B}</textarea
+      >
+    </div>
+
+    <!-- 对比选项 -->
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div>
+        <span class="calc-label">数组匹配</span>
+        <div class="seg" id="array-seg">
+          <button class="active" data-array="index" title="数组元素按位置一一对比">按索引</button>
+          <button data-array="id" title="对象数组按 id 字段匹配，增删元素不影响其余对比">按 id 字段</button>
+        </div>
+      </div>
+      <label class="mt-4 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400" title="默认只展示有差异的条目">
+        <input type="checkbox" id="ck-unchanged" class="accent-brand-600" />
+        显示未变化条目
+      </label>
+    </div>
+    <p class="text-xs leading-relaxed text-slate-400">
+      路径语法 <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">$.a.b[0]</code>，键名含特殊字符时用
+      <code class="rounded bg-slate-100 px-1 dark:bg-slate-800">["my key"]</code>；对象键序不同视为相同。
+    </p>
+  </div>
+
+  <!-- 右：差异列表 -->
+  <span slot="output-tools">
+    <span class="flex items-center gap-2 text-xs font-semibold" id="stat-badges">
+      <span class="text-emerald-600 dark:text-emerald-400" id="st-added" title="新增条目数">+0</span>
+      <span class="text-rose-600 dark:text-rose-400" id="st-removed" title="删除条目数">−0</span>
+      <span class="text-amber-600 dark:text-amber-400" id="st-modified" title="修改条目数">~0</span>
+      <span class="text-slate-400" id="st-unchanged" title="未变化条目数（含容器）">=0</span>
+    </span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy" title="复制差异报告"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col">
+    <div id="diff-error" class="hidden border-b border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"></div>
+    <div id="diff-list" class="min-h-0 flex-1 overflow-y-auto p-2 font-mono text-xs leading-relaxed"></div>
+  </div>
+</Tool>
+
+<script>
+  import { diffJsonText, type DiffEntry } from '../../lib/json/diff';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const taA = $<HTMLTextAreaElement>('ta-a');
+  const taB = $<HTMLTextAreaElement>('ta-b');
+  const listEl = $('diff-list');
+  const errEl = $('diff-error');
+  const stAdded = $('st-added');
+  const stRemoved = $('st-removed');
+  const stModified = $('st-modified');
+  const stUnchanged = $('st-unchanged');
+
+  const state = { arrayMode: 'index' as 'index' | 'id', includeUnchanged: false };
+  /** 列表最多渲染条数（超出提示折叠，避免超大 diff 卡死页面） */
+  const RENDER_CAP = 400;
+
+  const TYPE_META: Record<DiffEntry['type'], { sign: string; label: string; cls: string }> = {
+    added: { sign: '+', label: '新增', cls: 'text-emerald-600 dark:text-emerald-400' },
+    removed: { sign: '−', label: '删除', cls: 'text-rose-600 dark:text-rose-400' },
+    modified: { sign: '~', label: '修改', cls: 'text-amber-600 dark:text-amber-400' },
+    unchanged: { sign: '=', label: '未变', cls: 'text-slate-400' },
+  };
+
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  function render() {
+    const a = taA.value;
+    const b = taB.value;
+    if (!a.trim() && !b.trim()) {
+      errEl.classList.add('hidden');
+      listEl.innerHTML = '<p class="p-4 text-center text-slate-400">两侧均为空，粘贴 JSON 后自动对比</p>';
+      stAdded.textContent = '+0';
+      stRemoved.textContent = '−0';
+      stModified.textContent = '~0';
+      stUnchanged.textContent = '=0';
+      return;
+    }
+    const res = diffJsonText(a, b, { arrayMode: state.arrayMode, includeUnchanged: state.includeUnchanged });
+    if (res.error) {
+      errEl.textContent = '✗ ' + res.error;
+      errEl.classList.remove('hidden');
+      listEl.innerHTML = '';
+      return;
+    }
+    errEl.classList.add('hidden');
+    stAdded.textContent = `+${res.stats.added}`;
+    stRemoved.textContent = `−${res.stats.removed}`;
+    stModified.textContent = `~${res.stats.modified}`;
+    stUnchanged.textContent = `=${res.stats.unchanged}`;
+
+    if (!res.entries.length) {
+      listEl.innerHTML = '<p class="p-4 text-center text-emerald-600 dark:text-emerald-400">两份 JSON 完全相同 ✓</p>';
+      return;
+    }
+    const shown = res.entries.slice(0, RENDER_CAP);
+    listEl.innerHTML =
+      shown
+        .map((e) => {
+          const m = TYPE_META[e.type];
+          const val =
+            e.type === 'added'
+              ? `<span class="text-emerald-700 dark:text-emerald-300">${esc(e.newValue ?? '')}</span>`
+              : e.type === 'removed'
+                ? `<span class="text-rose-700 dark:text-rose-300 line-through">${esc(e.oldValue ?? '')}</span>`
+                : e.type === 'modified'
+                  ? `<span class="text-rose-700 dark:text-rose-300 line-through">${esc(e.oldValue ?? '')}</span> <span class="text-slate-400">→</span> <span class="text-emerald-700 dark:text-emerald-300">${esc(e.newValue ?? '')}</span>`
+                  : `<span class="text-slate-500">${esc(e.oldValue ?? '')}</span>`;
+          return `<div class="flex gap-2 rounded-lg px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60" title="${m.label} · 类型 ${e.valueType}">
+            <span class="${m.cls} w-3 shrink-0 text-center font-bold">${m.sign}</span>
+            <span class="min-w-0 flex-1 break-all">
+              <span class="text-slate-500 dark:text-slate-400">${esc(e.path)}</span>
+              <span class="ml-1 rounded bg-slate-100 px-1 text-[10px] text-slate-400 dark:bg-slate-800">${e.valueType}</span>
+              <span class="ml-1">${val}</span>
+            </span>
+          </div>`;
+        })
+        .join('') +
+      (res.entries.length > RENDER_CAP
+        ? `<p class="p-2 text-center text-slate-400">…另有 ${res.entries.length - RENDER_CAP} 条差异未渲染（共 ${res.entries.length} 条）</p>`
+        : '');
+  }
+
+  /** 生成纯文本差异报告（复制用） */
+  function buildReport(): string {
+    const res = diffJsonText(taA.value, taB.value, { arrayMode: state.arrayMode, includeUnchanged: state.includeUnchanged });
+    if (res.error) return res.error;
+    const head = `新增 ${res.stats.added} · 删除 ${res.stats.removed} · 修改 ${res.stats.modified} · 未变 ${res.stats.unchanged}`;
+    const lines = res.entries.map((e) => {
+      const m = TYPE_META[e.type];
+      if (e.type === 'added') return `${m.sign} ${e.path} = ${e.newValue ?? ''}`;
+      if (e.type === 'removed') return `${m.sign} ${e.path}（旧值 ${e.oldValue ?? ''}）`;
+      if (e.type === 'modified') return `${m.sign} ${e.path}：${e.oldValue ?? ''} → ${e.newValue ?? ''}`;
+      return `${m.sign} ${e.path} = ${e.oldValue ?? ''}`;
+    });
+    return [head, '', ...lines].join('\n');
+  }
+
+  // ---- 事件 ----
+  let timer = 0;
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = window.setTimeout(render, 250);
+  };
+  taA.addEventListener('input', schedule);
+  taB.addEventListener('input', schedule);
+
+  $('array-seg').querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $('array-seg').querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.arrayMode = btn.dataset.array as 'index' | 'id';
+      render();
+    });
+  });
+  $('ck-unchanged').addEventListener('change', (e) => {
+    state.includeUnchanged = (e.target as HTMLInputElement).checked;
+    render();
+  });
+
+  $('btn-sample').addEventListener('click', () => {
+    const btn = $('btn-sample');
+    taA.value = btn.dataset.a ?? '';
+    taB.value = btn.dataset.b ?? '';
+    render();
+  });
+  $('btn-swap').addEventListener('click', () => {
+    const t = taA.value;
+    taA.value = taB.value;
+    taB.value = t;
+    render();
+  });
+  $('btn-clear').addEventListener('click', () => {
+    taA.value = '';
+    taB.value = '';
+    render();
+  });
+  const COPY_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+  const CHECK_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+  $('btn-copy').addEventListener('click', async () => {
+    const text = buildReport();
+    try {
+      await navigator.clipboard.writeText(text);
+      $('btn-copy').innerHTML = CHECK_SVG;
+      $('btn-copy').title = '已复制差异报告';
+      window.setTimeout(() => {
+        $('btn-copy').innerHTML = COPY_SVG;
+        $('btn-copy').title = '复制差异报告';
+      }, 1200);
+    } catch {
+      /* 剪贴板不可用时忽略 */
+    }
+  });
+
+  render();
+</script>

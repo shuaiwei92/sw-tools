@@ -23,7 +23,7 @@ import Icon from '../../components/Icon.astro';
       <span class="cursor-default font-medium text-slate-700 dark:text-slate-200" title="当前页面">格式化</span>
     </nav>
     <span class="text-xs text-slate-400">
-      失去焦点自动应用当前格式（格式化 / 压缩 / 排序键）；输入与历史记录均在本地浏览器处理（localStorage），不会上传任何服务器。
+      点击对应按钮执行格式化 / 压缩 / 排序键 / 转义；输入框失焦且右侧尚无内容时，会按当前模式自动生成结果（不改动输入框内容）。输入与历史记录均在本地浏览器处理（localStorage），不会上传任何服务器。
     </span>
   </div>
 
@@ -67,19 +67,40 @@ import Icon from '../../components/Icon.astro';
         <button class="tool-btn tool-btn-sm" data-act="minify" title="压缩为单行"><Icon name="minify" /><span>压缩</span></button>
         <button class="tool-btn tool-btn-sm" data-act="sort" title="按字母序排序对象键"><Icon name="sort" /><span>排序键</span></button>
         <button class="tool-btn tool-btn-sm" data-act="validate" title="校验 JSON 合法性"><Icon name="check" /><span>校验</span></button>
-        <button class="tool-btn tool-btn-sm" data-act="escape" title="转为 JSON 字符串字面量"><Icon name="escape" /><span>转义</span></button>
-        <button class="tool-btn tool-btn-sm" data-act="unescape" title="解析 JSON 字符串字面量"><Icon name="escape" /><span>反转义</span></button>
+        <div class="relative" id="esc-wrap">
+          <button class="tool-btn tool-btn-sm" data-act="esc-toggle" title="转义 / 反转义">
+            <Icon name="escape" /><span>转义</span>
+            <svg class="h-3 w-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div
+            id="esc-menu"
+            class="hidden absolute left-0 top-full z-30 mt-1 w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          >
+            <button data-act="escape" class="block w-full rounded-md px-2 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span class="block text-sm text-slate-600 dark:text-slate-300">转义</span>
+              <span class="block text-[11px] text-slate-400">在引号等特殊字符前添加 \</span>
+            </button>
+            <button data-act="unescape" class="block w-full rounded-md px-2 py-1.5 text-left transition hover:bg-slate-100 dark:hover:bg-slate-800">
+              <span class="block text-sm text-slate-600 dark:text-slate-300">反转义</span>
+              <span class="block text-[11px] text-slate-400">移除内容中的 \ 还原文本</span>
+            </button>
+          </div>
+        </div>
         <span class="ml-auto flex items-center gap-1">
-          <button class="tool-btn tool-btn-sm" data-act="sample" title="载入示例"><Icon name="sample" /></button>
+          <button class="tool-btn tool-btn-sm" data-act="copy-input" title="复制输入内容"><Icon name="copy" /><span>复制</span></button>
+          <button class="tool-btn tool-btn-sm" data-act="lines" title="显示 / 隐藏行号"><Icon name="list" /><span>行号</span></button>
           <button class="tool-btn tool-btn-sm" data-act="clear" title="清空输入"><Icon name="trash" /></button>
         </span>
       </div>
-      <textarea
-        id="input"
-        spellcheck="false"
-        placeholder="在此粘贴 JSON…（失去焦点后自动应用当前格式）"
-        class="mt-0 min-h-[18rem] w-full flex-1 resize-none rounded-b-xl border border-slate-300 bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none focus:border-brand-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
-      ></textarea>
+      <div class="flex min-h-0 flex-1 overflow-hidden rounded-b-xl border border-slate-300 dark:border-slate-700">
+        <div id="input-gutter" class="gutter hidden"></div>
+        <textarea
+          id="input"
+          spellcheck="false"
+          placeholder="在此粘贴 JSON…（点击「格式化」按钮美化）"
+          class="mt-0 min-h-[18rem] w-full flex-1 resize-none border-0 bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none focus:bg-white lg:min-h-0 dark:bg-slate-900 dark:focus:bg-slate-800"
+        ></textarea>
+      </div>
     </section>
 
     <!-- 右：输出 / 树视图 -->
@@ -115,17 +136,19 @@ import Icon from '../../components/Icon.astro';
           </label>
         </span>
       </div>
-      <textarea
-        id="output"
-        readonly
-        spellcheck="false"
-        placeholder="结果将显示在此…"
-        class="hidden mt-0 min-h-[18rem] w-full flex-1 resize-none rounded-b-xl border border-slate-300 bg-white p-3 font-mono text-sm leading-relaxed outline-none focus:border-brand-500 lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
-      ></textarea>
-      <div
-        id="tree-panel"
-        class="mt-0 min-h-[18rem] flex-1 overflow-auto rounded-b-xl border border-slate-200 bg-slate-50 p-3 font-mono text-sm lg:min-h-0 dark:border-slate-700 dark:bg-slate-900"
-      ></div>
+      <div class="flex min-h-0 flex-1 overflow-hidden rounded-b-xl border border-slate-300 dark:border-slate-700">
+        <textarea
+          id="output"
+          readonly
+          spellcheck="false"
+          placeholder="结果将显示在此…"
+          class="hidden mt-0 min-h-[18rem] w-full flex-1 resize-none border-0 bg-white p-3 font-mono text-sm leading-relaxed outline-none focus:bg-slate-50 lg:min-h-0 dark:bg-slate-900 dark:focus:bg-slate-800"
+        ></textarea>
+        <div
+          id="tree-panel"
+          class="mt-0 min-h-[18rem] flex-1 overflow-auto bg-slate-50 p-3 font-mono text-sm lg:min-h-0 dark:bg-slate-900"
+        ></div>
+      </div>
     </section>
     </div>
   </div>
@@ -155,22 +178,21 @@ import Icon from '../../components/Icon.astro';
   const historyRail = document.getElementById('history-rail') as HTMLElement;
   const historyList = document.getElementById('history-list') as HTMLElement;
   const treeBtn = document.querySelector('[data-act="tree"]') as HTMLButtonElement | null;
+  const inputGutter = document.getElementById('input-gutter') as HTMLDivElement;
+  const escWrap = document.getElementById('esc-wrap') as HTMLElement;
+  const escMenu = document.getElementById('esc-menu') as HTMLElement;
+
+  let inputLinesOn = false;
 
   let treeVisible = true;
+  // 是否有「有效输出」（可解析为树）。仅在有有效输出时，树视图按钮才点亮；错误提示等非树内容不点亮。
+  let hasValidOutput = false;
   // 当前「视图模式」：失焦自动应用的就是该模式。点「压缩」后切到 minify 并持续保持，直到再次点「格式化 / 排序键」。
   let currentMode: 'format' | 'minify' | 'sort' = 'format';
   const TREE_EMPTY_HINT =
     '<div class="text-slate-400">在左侧粘贴 JSON 后，此处显示结构化树视图，支持点击节点折叠 / 展开。「展开全部 / 折叠全部」可一键控制嵌套层级。</div>';
 
   const TRASH_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>`;
-
-  const SAMPLE = `{
-  "name": "sw-tools",
-  "version": "0.1",
-  "tools": ["json-formatter", "base64"],
-  "nested": { "b": 2, "a": 1, "list": [3, 1, 2] },
-  "active": true
-}`;
 
   // ---------- 历史记录（localStorage，本地不出浏览器） ----------
   const HKEY = 'json-formatter-history-v1';
@@ -285,6 +307,7 @@ import Icon from '../../components/Icon.astro';
     treePanel.classList.add('hidden');
     output.classList.remove('hidden');
     treeVisible = false;
+    updateTreeButton();
   }
 
   function showTreeView() {
@@ -294,11 +317,10 @@ import Icon from '../../components/Icon.astro';
     updateTreeButton();
   }
 
-  /** 树视图按钮状态：有输出内容时点亮（品牌色）并禁用；无内容时恢复中性且禁用 */
+  /** 树视图按钮状态：有有效输出时点亮（品牌色）且不可点击（树视图为默认呈现）；无有效输出时中性且禁用 */
   function updateTreeButton() {
     if (!treeBtn) return;
-    const hasOutput = output.value.trim().length > 0;
-    if (hasOutput) {
+    if (hasValidOutput) {
       treeBtn.classList.add('tree-btn-active');
       treeBtn.disabled = true;
       treeBtn.title = '树视图为输出的默认呈现（有内容时不可切换）';
@@ -309,11 +331,34 @@ import Icon from '../../components/Icon.astro';
     }
   }
 
-  /** 转义 / 反转义结果在树面板中以纯文本呈现，避免切到原文视图（保持树视图为默认） */
-  function showEscapedText(text: string, label: string) {
-    currentData = undefined;
-    treePanel.innerHTML = `<div class="break-words whitespace-pre-wrap text-sm leading-relaxed text-slate-700 dark:text-slate-200">${escapeHtml(text)}</div>`;
-    showTreeView();
+  /** 行号槽：按内容行数渲染序号，并与对应 textarea 的纵向滚动同步 */
+  function refreshGutter(g: HTMLDivElement, ta: HTMLTextAreaElement) {
+    if (g.classList.contains('hidden')) return;
+    const n = ta.value.split('\n').length || 1;
+    let s = '';
+    for (let i = 1; i <= n; i++) s += i + '\n';
+    g.textContent = s;
+    g.scrollTop = ta.scrollTop;
+  }
+
+  function refreshGutters() {
+    refreshGutter(inputGutter, input);
+  }
+
+  /** 行号开关：仅作用于输入框（输出框不显示行号） */
+  function toggleLines() {
+    inputLinesOn = !inputLinesOn;
+    inputGutter.classList.toggle('hidden', !inputLinesOn);
+    if (inputLinesOn) refreshGutter(inputGutter, input);
+    setStatus(inputLinesOn ? '已显示行号' : '已隐藏行号');
+  }
+
+  /** 转义 / 反转义下拉菜单 */
+  function toggleEscMenu() {
+    escMenu.classList.toggle('hidden');
+  }
+  function closeEscMenu() {
+    escMenu.classList.add('hidden');
   }
 
   /** 当前树视图的数据源（由左侧输入解析而来），编辑树节点后同步回写 */
@@ -359,12 +404,21 @@ import Icon from '../../components/Icon.astro';
     showTreeView();
   }
 
-  /** 将转换结果写回输入框（原位编辑），并刷新右侧树视图与输出框 */
+  /** 将转换结果写回输入框（原位编辑），并默认在右侧以树视图呈现（输出默认形态） */
   function applyToInput(transformed: string, msg: string) {
     input.value = transformed;
     output.value = transformed;
+    hasValidOutput = true;
     renderTreeFromInput();
     setStatus(msg);
+  }
+
+  /** 将文本（含错误信息）直接写入输出文本框并展示，用于转义 / 反转义失败或错误提示（非树内容，按钮不点亮） */
+  function showOutputText(text: string, msg: string, isError = false) {
+    output.value = text;
+    hasValidOutput = false;
+    showOutputView();
+    setStatus(msg, !isError);
   }
 
   /** 收集所有可折叠节点（对象/数组）的路径 */
@@ -410,24 +464,7 @@ import Icon from '../../components/Icon.astro';
     return { ok: true, value };
   }
 
-  /** 失焦自动应用当前模式；点「压缩」后模式为 minify，后续失焦仍保持压缩，不会被重新格式化覆盖 */
-  function autoFormat() {
-    const text = input.value;
-    if (!text.trim()) return;
-    const res = transformByMode(text);
-    if (!res.ok) {
-      setStatus(`✗ ${res.error}${res.line ? `（第 ${res.line} 行，第 ${res.column} 列）` : ''}`, false);
-      return;
-    }
-    input.value = res.value!;
-    output.value = res.value!;
-    renderTreeFromInput();
-    // 仅「格式化」模式（真正的失焦自动美化）写入历史；压缩 / 排序由按钮动作驱动，避免重复写入
-    if (currentMode === 'format') addHistory(res.value!);
-    const label = currentMode === 'minify' ? '压缩' : currentMode === 'sort' ? '排序' : '格式化';
-    setStatus(`✓ JSON 合法，已自动${label}（${text.length} 字符 → ${res.value!.length} 字符）`);
-  }
-
+  /** 各功能按钮入口；仅「格式化 / 压缩 / 排序键 / 转义 / 反转义」会改写输入框内容并触发输出 */
   function run(action: string) {
     const text = input.value;
     try {
@@ -450,25 +487,52 @@ import Icon from '../../components/Icon.astro';
           else setStatus(`✗ ${r.error}${r.line ? `（第 ${r.line} 行，第 ${r.column} 列）` : ''}`, false);
           break;
         }
+        case 'esc-toggle':
+          toggleEscMenu();
+          break;
         case 'escape':
-          output.value = escapeJsonString(text);
-          showEscapedText(output.value, '已转义');
-          setStatus('已转义为 JSON 字符串（见右侧面板）');
+          currentMode = 'format';
+          applyToInput(escapeJsonString(text), '已转义（结果已输出到右侧文本框）');
+          closeEscMenu();
           break;
-        case 'unescape':
-          output.value = unescapeJsonString(text);
-          showEscapedText(output.value, '已反转义');
-          setStatus('已反转义（见右侧面板）');
-          break;
-        case 'copy': {
+        case 'unescape': {
+          currentMode = 'format';
+          let inner: unknown;
           try {
-            const data = formatJson(text, getIndent());
-            navigator.clipboard.writeText(data).then(() => setStatus('已复制结果到剪贴板'));
+            inner = JSON.parse(text);
           } catch {
-            setStatus('输入无效，无法复制', false);
+            showOutputText('输入不是合法的 JSON 字符串字面量，无法反转义', '✗ 输入不是合法的 JSON 字符串字面量，无法反转义', true);
+            closeEscMenu();
+            break;
+          }
+          if (typeof inner !== 'string') {
+            showOutputText('输入不是 JSON 字符串字面量（应为带引号的字符串），无法反转义', '✗ 输入不是 JSON 字符串字面量，无法反转义', true);
+            closeEscMenu();
+            break;
+          }
+          applyToInput(inner, '已反转义（结果已输出到右侧文本框）');
+          closeEscMenu();
+          break;
+        }
+        case 'copy-input': {
+          try {
+            navigator.clipboard.writeText(input.value).then(() => setStatus('已复制输入内容'));
+          } catch {
+            setStatus('复制失败', false);
           }
           break;
         }
+        case 'copy': {
+          try {
+            navigator.clipboard.writeText(output.value).then(() => setStatus('已复制结果'));
+          } catch {
+            setStatus('复制失败', false);
+          }
+          break;
+        }
+        case 'lines':
+          toggleLines();
+          break;
         case 'download': {
           try {
             const data = formatJson(text, getIndent());
@@ -485,13 +549,10 @@ import Icon from '../../components/Icon.astro';
           }
           break;
         }
-        case 'sample':
-          input.value = SAMPLE;
-          applyToInput(formatJson(SAMPLE, getIndent()), '已载入示例并格式化（已应用到输入框）');
-          break;
         case 'clear':
           input.value = '';
           output.value = '';
+          hasValidOutput = false;
           renderTreeFromInput();
           setStatus('');
           input.focus();
@@ -520,6 +581,7 @@ import Icon from '../../components/Icon.astro';
           }
           break;
       }
+      refreshGutters();
     } catch (e) {
       setStatus(`✗ ${(e as Error).message}`, false);
     }
@@ -570,6 +632,7 @@ import Icon from '../../components/Icon.astro';
       const text = JSON.stringify(currentData, null, getIndent());
       input.value = text;
       output.value = text;
+      hasValidOutput = true;
       renderTreeFromData();
       setStatus(msg, ok);
     } catch (e) {
@@ -822,8 +885,34 @@ import Icon from '../../components/Icon.astro';
     btn.addEventListener('click', () => run((btn as HTMLElement).dataset.act as string));
   });
 
-  // 失焦自动格式化
-  input.addEventListener('blur', autoFormat);
+  // 转义 / 反转义下拉：点击面板外部时收起
+  document.addEventListener('click', (e) => {
+    if (!escWrap.contains(e.target as Node)) closeEscMenu();
+  });
+
+  // 行号槽：随内容变化与滚动同步（仅输入框）
+  const syncInputGutter = () => refreshGutter(inputGutter, input);
+  input.addEventListener('input', refreshGutters);
+  input.addEventListener('scroll', syncInputGutter);
+
+  // 输入框失焦时：若右侧尚无输出且输入为合法 JSON，按当前模式自动生成结果（不改动输入框内容）
+  input.addEventListener('blur', () => {
+    if (output.value.trim()) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const r = validateJson(text);
+    if (!r.ok) return;
+    const out =
+      currentMode === 'minify'
+        ? minifyJson(text)
+        : currentMode === 'sort'
+          ? sortKeysJson(text, getIndent())
+          : formatJson(text, getIndent());
+    output.value = out;
+    hasValidOutput = true;
+    renderTreeFromInput();
+    setStatus('已在右侧生成结果（点击按钮可切换模式或重新处理）');
+  });
 
   // 树视图内可编辑元素：Enter 直接提交（失焦），阻止换行
   treePanel.addEventListener('keydown', (e) => {
@@ -840,6 +929,7 @@ import Icon from '../../components/Icon.astro';
     if (!res.ok) return; // 输入非法时静默，等 blur/校验再提示
     input.value = res.value!;
     output.value = res.value!;
+    hasValidOutput = true;
     renderTreeFromInput();
     const label = currentMode === 'minify' ? '压缩' : currentMode === 'sort' ? '排序' : '格式化';
     setStatus(`已按 ${indentSel.value === 'tab' ? 'Tab' : indentSel.value + ' 空格'} 缩进重新${label}`);

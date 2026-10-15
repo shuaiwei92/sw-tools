@@ -1,0 +1,54 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="CRC 校验 · sw-tools"
+  description="CRC-8 / 16 / 32 / 64 多参数模型（SMBus、MODBUS、CCITT、ZIP、XZ 等），按 UTF-8 字节计算。"
+  toolName="CRC 校验"
+  inputPlaceholder="在此粘贴待校验文本…（失去焦点后计算，按 UTF-8 字节处理）"
+  outputLabel="CRC 值"
+  downloadName="crc"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    模型
+    <select
+      id="model"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="crc32-iso-hdlc">CRC-32/ISO-HDLC（ZIP）</option>
+      <option value="crc32-bzip2">CRC-32/BZIP2</option>
+      <option value="crc16-modbus">CRC-16/MODBUS</option>
+      <option value="crc16-ccitt-false">CRC-16/CCITT-FALSE</option>
+      <option value="crc16-xmodem">CRC-16/XMODEM</option>
+      <option value="crc16-arc">CRC-16/ARC（IBM）</option>
+      <option value="crc8-smbus">CRC-8/SMBUS</option>
+      <option value="crc8-maxim">CRC-8/MAXIM（1-Wire）</option>
+      <option value="crc64-xz">CRC-64/XZ</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { crcOfText, findCrcModel } from '../../lib/crypto/crc';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = '123456789';
+
+  const modelEl = () => document.getElementById('model') as HTMLSelectElement;
+
+  setupConverter({
+    downloadName: 'crc',
+    downloadExt: 'txt',
+    convert: (input) => crcOfText(input, findCrcModel(modelEl().value)),
+    sample: SAMPLE,
+  });
+
+  // 模型切换后立即重算
+  modelEl().addEventListener('change', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>

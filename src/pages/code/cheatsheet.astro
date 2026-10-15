@@ -1,0 +1,137 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+const GROUP_IDS = ['all', 'git', 'vim', 'linux', 'windows', 'vscode', 'excel'];
+const GROUP_LABELS: Record<string, string> = {
+  all: '全部',
+  git: 'Git',
+  vim: 'Vim',
+  linux: 'Linux',
+  windows: 'Windows',
+  vscode: 'VS Code',
+  excel: 'Excel',
+};
+---
+
+<Tool
+  title="快捷键速查表 · sw-tools"
+  toolName="快捷键速查表"
+  description="Git / Vim / Linux Shell / Windows / VS Code / Excel 常用快捷键速查：关键词搜索、按分组筛选，点击任意条目即可复制。"
+  categoryHref="/#code"
+  categoryName="代码工具"
+  inputLabel="搜索与筛选"
+  outputLabel="速查表"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="in-q">搜索</label>
+      <div class="flex gap-2">
+        <input id="in-q" type="text" spellcheck="false" class="calc-input flex-1 text-sm" placeholder="stash / 撤销 / :w …" />
+        <button class="tool-btn tool-btn-sm" id="btn-clear" title="清空搜索"><Icon name="trash" /></button>
+      </div>
+      <p class="mt-1 text-xs text-slate-400">匹配快捷键或功能描述，大小写不敏感。</p>
+    </div>
+
+    <div>
+      <span class="calc-label">分组</span>
+      <div class="flex flex-wrap gap-1.5" id="group-row">
+        {GROUP_IDS.map((id) => (
+          <button class:list={['preset-chip', id === 'all' && 'chip-active']} data-group={id}>{GROUP_LABELS[id]}</button>
+        ))}
+      </div>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 p-3 text-xs leading-relaxed text-slate-400 dark:border-slate-700">
+      <p id="stat-line">共收录 100+ 条常用快捷键。</p>
+      <p class="mt-1">数据内置于页面，离线可用；点击条目复制快捷键本身。</p>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3" id="result-area"></div>
+</Tool>
+
+<script>
+  import { CHEAT_GROUPS, searchShortcuts, countShortcuts } from '../../lib/code/cheatsheet';
+
+  const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+
+  let query = '';
+  let groupFilter = 'all';
+
+  function esc(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function render(): void {
+    const area = $('result-area');
+    const groups = searchShortcuts(query).filter((g) => groupFilter === 'all' || g.id === groupFilter);
+    const total = groups.reduce((s, g) => s + g.items.length, 0);
+    $('stat-line').textContent = `共收录 ${countShortcuts()} 条，当前显示 ${total} 条。`;
+
+    if (!groups.length) {
+      area.innerHTML = `<div class="flex flex-1 items-center justify-center text-sm text-slate-400">没有匹配「${esc(query)}」的快捷键</div>`;
+      return;
+    }
+
+    const html: string[] = [];
+    for (const g of groups) {
+      html.push(`
+        <div class="result-card" data-group="${g.id}">
+          <div class="flex items-center justify-between">
+            <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">${esc(g.name)}</span>
+            <span class="text-xs text-slate-400">${g.items.length} 条</span>
+          </div>
+          <div class="zebra mt-1">
+            ${g.items
+              .map(
+                (item) => `
+              <div class="res-row cursor-pointer items-center" data-keys="${esc(item.keys)}" title="点击复制">
+                <kbd class="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-mono text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">${esc(item.keys)}</kbd>
+                <span class="v text-xs">${esc(item.desc)}</span>
+              </div>`,
+              )
+              .join('')}
+          </div>
+        </div>`);
+    }
+    area.innerHTML = html.join('');
+
+    area.querySelectorAll<HTMLElement>('[data-keys]').forEach((row) => {
+      row.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(row.dataset.keys ?? '');
+          const v = row.querySelector('.v');
+          const old = v?.textContent ?? '';
+          if (v) v.textContent = '已复制 ✓';
+          window.setTimeout(() => {
+            if (v) v.textContent = old;
+          }, 900);
+        } catch {
+          /* 剪贴板不可用时忽略 */
+        }
+      });
+    });
+  }
+
+  $('in-q').addEventListener('input', () => {
+    query = (document.getElementById('in-q') as HTMLInputElement).value;
+    render();
+  });
+  $('btn-clear').addEventListener('click', () => {
+    query = '';
+    (document.getElementById('in-q') as HTMLInputElement).value = '';
+    render();
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('#group-row button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      groupFilter = btn.dataset.group ?? 'all';
+      document.querySelectorAll('#group-row button').forEach((b) => b.classList.toggle('chip-active', b === btn));
+      render();
+    });
+  });
+
+  render();
+</script>

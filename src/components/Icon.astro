@@ -36,6 +36,61 @@ const PATHS: Record<string, string> = {
   crop: '<path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M2 6h14a2 2 0 0 1 2 2v14"/>',
   flip: '<path d="M12 3v18"/><path d="M7 8 3 12l4 4"/><path d="M17 8l4 4-4 4"/>',
   compress: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+  watermark: '<path d="m7 21 11-11a4 4 0 0 0-5.66-5.66l-5.66 5.66a4 4 0 0 0 0 5.66L11 21"/><path d="m9 11 6 6"/><path d="M4 20h16"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  calculator: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M16 14v4M8 18h4"/>',
+  percent: '<path d="M19 5 5 19"/><circle cx="7.5" cy="7.5" r="2.5"/><circle cx="16.5" cy="16.5" r="2.5"/>',
+  exchange: '<path d="M7 7h11l-3-3M17 17H6l3 3"/>',
+  money: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/>',
+  heart: '<path d="M12 21s-7-4.35-9.5-8.5C1 9 2.5 5 6 5c2 0 3 1 4 2 1-1 2-2 4-2 3.5 0 5 4 3.5 7.5C19 16.65 12 21 12 21z"/>',
+  binary: '<path d="M6 3v18M4 7h4M4 17h4M14 3v18M12 7h4M12 17h4"/>',
+  function: '<path d="M4 18 9 6l5 12M5 14h7M14 4h6M15 4l4 16"/>',
+  ruler: '<path d="M3 9 15 3l6 12-12 6z"/><path d="M7 7l1.5 3M10 8.5l1.5 3M13 10l1.5 3"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/>',
+  scale: '<path d="M12 3v18M5 21h14M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  radio: '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 16.2a6 6 0 0 0 0-8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 19.1a10 10 0 0 0 0-14.2"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  shield: '<path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M10.8 12.2 20 3M17 6l3 3"/>',
+  file: '<path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+  dice: '<rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1"/><circle cx="15.5" cy="8.5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="8.5" cy="15.5" r="1"/><circle cx="15.5" cy="15.5" r="1"/>',
+  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  badge: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M5.5 16c.5-1.6 1.9-2.5 3.5-2.5s3 1 3.5 2.5M15 9h4M15 13h4"/>',
+  diff: '<path d="M5 3h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H5zM19 3h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6z"/>',
+  replace: '<path d="M14 4l6 6-6 6"/><path d="M20 10H8a4 4 0 0 0-4 4v2"/><path d="M10 20l-6-6 6-6"/><path d="M4 14h12a4 4 0 0 1 4 4v2"/>',
+  // ── 代码工具 ──
+  sql: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/>',
+  braces: '<path d="M9 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h2"/><path d="M15 3h2a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-2"/>',
+  ascii: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/>',
+  // ── 网络运维 ──
+  cron: '<circle cx="12" cy="13" r="8"/><path d="M12 9.5V13l2 1.5"/><path d="M5 3 3.5 4.5M19 3l1.5 1.5"/>',
+  ip: '<rect x="9" y="2" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><path d="M12 8v4h-7v4M12 12h7v4"/>',
+  ua: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M5.5 6.5h.01M8.2 6.5h.01"/>',
+  http: '<path d="M7 4v16M4 13l3 3 3-3M17 20V4M14 11l3-3 3 3"/>',
+  // ── 生成器 ──
+  qrcode: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/>',
+  barcode: '<path d="M3 6v12M6 6v12M9 6v12M11 6v12M14 6v12M17 6v12M20 6v12"/>',
+  totp: '<rect x="6" y="2" width="12" height="20" rx="2"/><circle cx="12" cy="10" r="2.5"/><path d="M12 12.5V14M10 18h4"/>',
+  // ── 格式转换 ──
+  markdown: '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 15V9l3 3 3-3v6"/><path d="M16 9v6M13.5 12.5 16 15l2.5-2.5"/>',
+  pxrem: '<path d="M3 18 7.5 7l4.5 11"/><path d="M5 14h5"/><path d="M16 5v14M13 8l3-3 3 3M13 16l3 3 3-3"/>',
+  // ── 数据工具 ──
+  table: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+  csv: '<path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z"/><path d="M8.5 13h.01M15.5 13h.01M8.5 17h.01M15.5 17h.01"/>',
+  exif: '<path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.5"/>',
+  // ── 文本处理 ──
+  number: '<circle cx="12" cy="12" r="9"/><path d="M8 8l4 5 4-5M12 13v5M9 15h6M9 18h6"/>',
+  zh: '<path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/>',
+  // ── 取色 / 配色 ──
+  gradient: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M6 12h3M13 12h5"/><circle cx="11.5" cy="12" r="1.5"/>',
+  shadow: '<rect x="4" y="4" width="12" height="12" rx="2"/><path d="M8 20h8a4 4 0 0 0 4-4V8"/>',
+  pick: '<path d="m3 21 1.5-4.5L16 5a2.1 2.1 0 0 1 3 3L7.5 19.5z"/><path d="m14 7 3 3"/>',
+  // ── 网络运维 ──
+  chmod: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h.01M11 9h.01M15 9h.01M7 13h.01M11 13h.01M15 13h.01M7 17h.01M11 17h.01M15 17h.01"/>',
+  curl: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m6 9 3 3-3 3M12 15h5"/>',
+  // ── 代码工具 ──
+  keyboard: '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h12"/>',
 };
 
 const d = PATHS[name] ?? '';

@@ -1,0 +1,78 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="User-Agent 解析 · sw-tools"
+  toolName="User-Agent 解析"
+  description="解析 User-Agent 字符串：浏览器及版本、渲染引擎、操作系统、设备类型与架构识别，支持爬虫检测。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="UA 字符串"
+  outputLabel="解析结果"
+  columns="even"
+>
+  <button slot="input-tools" id="ua-current" class="tool-btn tool-btn-sm" title="填入当前浏览器的 User-Agent">当前浏览器 UA</button>
+  <button slot="input-tools" id="ua-clear" class="tool-btn tool-btn-sm" title="清空输入">清空</button>
+
+  <textarea
+    slot="input"
+    id="ua-src"
+    class="min-h-[14rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+    spellcheck="false"
+    placeholder="粘贴 User-Agent 字符串…（自动解析）"
+  ></textarea>
+
+  <div slot="output" class="min-h-0 flex-1 overflow-y-auto p-3">
+    <div id="ua-result" class="grid gap-3 sm:grid-cols-2"></div>
+  </div>
+</Tool>
+
+<script>
+  import { parseUA } from '../../lib/network/ua';
+
+  const src = document.getElementById('ua-src') as HTMLTextAreaElement;
+  const out = document.getElementById('ua-result')!;
+
+  const UA_SAMPLE =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
+  function card(title: string, value: string, hint = '') {
+    return `<div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <div class="text-xs text-slate-400">${title}</div>
+      <div class="mt-1 font-semibold text-slate-700 dark:text-slate-200">${value || '未知'}</div>
+      ${hint ? `<div class="mt-0.5 text-xs text-slate-400">${hint}</div>` : ''}
+    </div>`;
+  }
+
+  function render() {
+    const text = src.value.trim();
+    if (!text) {
+      out.innerHTML = '<div class="text-sm text-slate-400">粘贴 UA 字符串后自动解析…</div>';
+      return;
+    }
+    const r = parseUA(text);
+    const deviceLabel = { desktop: '桌面端', mobile: '手机', tablet: '平板', bot: '爬虫 / 机器人' }[r.deviceType];
+    out.innerHTML =
+      card('浏览器', r.browser, r.browserVersion ? `版本 ${r.browserVersion}` : '') +
+      card('渲染引擎', r.engine) +
+      card('操作系统', r.os, r.osVersion ? `版本 ${r.osVersion}` : '') +
+      card('设备类型', deviceLabel) +
+      card('系统架构', r.arch) +
+      card('是否爬虫', r.isBot ? '是' : '否');
+  }
+
+  src.addEventListener('input', render);
+
+  document.getElementById('ua-current')!.addEventListener('click', () => {
+    src.value = navigator.userAgent;
+    render();
+  });
+  document.getElementById('ua-clear')!.addEventListener('click', () => {
+    src.value = '';
+    render();
+  });
+
+  src.value = UA_SAMPLE;
+  render();
+</script>

@@ -1,0 +1,206 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+const SAMPLES: { label: string; cmd: string }[] = [
+  {
+    label: 'GET JSON',
+    cmd: `curl https://api.github.com/repos/withastro/astro`,
+  },
+  {
+    label: 'POST JSON',
+    cmd: `curl -X POST \\
+  -H 'Content-Type: application/json' \\
+  -d '{"name":"sw","tags":["tool","web"]}' \\
+  https://api.example.com/v1/users`,
+  },
+  {
+    label: '表单登录',
+    cmd: `curl -d 'user=admin&pass=123456' https://example.com/login`,
+  },
+  {
+    label: 'Bearer 认证',
+    cmd: `curl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9' -H 'Accept: application/json' https://api.example.com/me`,
+  },
+  {
+    label: 'Basic 认证',
+    cmd: `curl -u admin:secret https://api.example.com/admin`,
+  },
+  {
+    label: '跟随跳转',
+    cmd: `curl -sL --compressed https://example.com`,
+  },
+  {
+    label: 'GET 查询串',
+    cmd: `curl -G -d 'q=astro' -d 'lang=zh' https://example.com/search`,
+  },
+];
+---
+
+<Tool
+  title="curl 转代码 · sw-tools"
+  toolName="curl 转代码"
+  description="粘贴 curl 命令，一键转换为 JavaScript fetch / Axios / Node.js / Python requests / Go / PHP 代码，自动推导方法与请求头，JSON 请求体自动美化。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="curl 命令"
+  outputLabel="生成代码"
+  columns="even"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div class="flex min-h-0 flex-1 flex-col">
+      <label class="calc-label" for="in-curl">curl 命令</label>
+      <textarea
+        id="in-curl"
+        spellcheck="false"
+        class="calc-input min-h-0 flex-1 resize-none font-mono text-xs leading-relaxed"
+        placeholder="curl -X POST -H 'Content-Type: application/json' -d '{&quot;a&quot;:1}' https://api.example.com"
+      >{SAMPLES[1].cmd}</textarea>
+    </div>
+
+    <div>
+      <span class="calc-label">示例</span>
+      <div class="flex flex-wrap gap-1.5">
+        {SAMPLES.map((s) => (
+          <button class="preset-chip" data-cmd={s.cmd} title={s.cmd}>{s.label}</button>
+        ))}
+      </div>
+    </div>
+
+    <!-- 请求摘要 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700" id="sum-card">
+      <div class="flex items-center gap-2">
+        <span class="rounded-md bg-brand-100 px-2 py-0.5 font-mono text-xs font-bold text-brand-700 dark:bg-brand-950 dark:text-brand-300" id="sum-method">POST</span>
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">请求摘要</span>
+      </div>
+      <div class="mt-2 space-y-1 text-xs" id="sum-body"></div>
+    </div>
+
+    <div id="warn-box" class="hidden rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+      <span class="font-semibold">解析提示</span>
+      <ul class="mt-1 list-disc pl-4" id="warn-list"></ul>
+    </div>
+
+    <p class="text-xs text-slate-400">
+      支持 -X / -H / -d / --data-urlencode / --json / -F / -u / -A / -e / -b / -G / -I / -k / -L / --compressed 等常用参数；合并短 flag（如 -sL）自动展开。
+    </p>
+  </div>
+
+  <span slot="output-tools">
+    <div class="seg" id="lang-seg">
+      <button data-lang="fetch" class="active">fetch</button>
+      <button data-lang="axios">Axios</button>
+      <button data-lang="node">Node</button>
+      <button data-lang="python">Python</button>
+      <button data-lang="go">Go</button>
+      <button data-lang="php">PHP</button>
+    </div>
+    <button class="tool-btn tool-btn-sm" id="btn-copy" title="复制生成的代码"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col p-3">
+    <div id="curl-error" class="hidden rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-600 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300"></div>
+    <pre
+      id="code-out"
+      class="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+    ></pre>
+  </div>
+</Tool>
+
+<script>
+  import { parseCurl, toCode, type CurlRequest, type CodeLang } from '../../lib/network/curl';
+
+  const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+  const ta = document.getElementById('in-curl') as HTMLTextAreaElement;
+
+  let lang: CodeLang = 'fetch';
+
+  function esc(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderSummary(req: CurlRequest): void {
+    const parts: string[] = [];
+    parts.push(`<div class="flex gap-2"><span class="w-14 shrink-0 text-slate-400">URL</span><span class="font-mono break-all text-slate-600 dark:text-slate-300">${esc(req.url)}</span></div>`);
+    parts.push(`<div class="flex gap-2"><span class="w-14 shrink-0 text-slate-400">方法</span><span class="font-mono text-slate-600 dark:text-slate-300">${esc(req.method)}</span></div>`);
+    if (req.user) {
+      parts.push(`<div class="flex gap-2"><span class="w-14 shrink-0 text-slate-400">认证</span><span class="font-mono text-slate-600 dark:text-slate-300">Basic ${esc(req.user)}</span></div>`);
+    }
+    for (const [k, v] of req.headers) {
+      parts.push(`<div class="flex gap-2"><span class="w-14 shrink-0 text-slate-400">${esc(k)}</span><span class="font-mono break-all text-slate-600 dark:text-slate-300">${esc(v)}</span></div>`);
+    }
+    if (req.body) {
+      const body = req.body.length > 300 ? req.body.slice(0, 300) + `…（共 ${req.body.length} 字符）` : req.body;
+      parts.push(`<div class="flex gap-2"><span class="w-14 shrink-0 text-slate-400">请求体</span><span class="font-mono break-all text-slate-600 dark:text-slate-300">${esc(body)}</span></div>`);
+    }
+    if (req.form?.length) {
+      parts.push(`<div class="flex gap-2"><span class="w-14 shrink-0 text-slate-400">表单</span><span class="font-mono break-all text-slate-600 dark:text-slate-300">${esc(req.form.map(([k, v]) => `${k}=${v}`).join(' & '))}</span></div>`);
+    }
+    $('sum-body').innerHTML = parts.join('');
+    $('sum-method').textContent = req.method;
+  }
+
+  function render(): void {
+    const text = ta.value;
+    const err = $('curl-error');
+    const codeOut = $('code-out');
+    const warnBox = $('warn-box');
+    if (!text.trim()) {
+      err.classList.add('hidden');
+      codeOut.textContent = '';
+      warnBox.classList.add('hidden');
+      return;
+    }
+    const req = parseCurl(text);
+    if (!req) {
+      err.textContent = '无法解析：未找到 URL，或引号没有闭合。请检查命令格式。';
+      err.classList.remove('hidden');
+      codeOut.textContent = '';
+      warnBox.classList.add('hidden');
+      return;
+    }
+    err.classList.add('hidden');
+    renderSummary(req);
+    codeOut.textContent = toCode(req, lang);
+    const warnList = $('warn-list');
+    if (req.warnings.length) {
+      warnList.innerHTML = req.warnings.map((w) => `<li>${esc(w)}</li>`).join('');
+      warnBox.classList.remove('hidden');
+    } else {
+      warnBox.classList.add('hidden');
+    }
+  }
+
+  let timer = 0;
+  ta.addEventListener('input', () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(render, 200);
+  });
+
+  // 示例 chips
+  document.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      ta.value = btn.dataset.cmd!;
+      render();
+    });
+  });
+
+  // 语言切换
+  document.querySelectorAll<HTMLButtonElement>('#lang-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      lang = btn.dataset.lang as CodeLang;
+      document.querySelectorAll('#lang-seg button').forEach((b) => b.classList.toggle('active', b === btn));
+      render();
+    });
+  });
+
+  $('btn-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($('code-out').textContent ?? '');
+    } catch {
+      /* 剪贴板不可用时忽略 */
+    }
+  });
+
+  render();
+</script>

@@ -1,0 +1,186 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { ASCII_TABLE, KEY_CODES } from '../../lib/code/asciiTable';
+---
+
+<Tool
+  title="ASCII / 键值速查 · sw-tools"
+  toolName="ASCII / 键值速查"
+  description="ASCII 与扩展 Latin-1 全码表（0~255）、常用键盘键值（KeyboardEvent.code）速查，支持实时探测按键。"
+  categoryHref="/#code"
+  categoryName="代码工具"
+  inputLabel="检索"
+  outputLabel="码表"
+  columns="left-narrow"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    表格
+    <select
+      id="table-switch"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="ascii">ASCII / Latin-1</option>
+      <option value="keys">键盘键值</option>
+    </select>
+  </label>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="q">搜索（十进制 / 十六进制 / 字符 / 描述）</label>
+      <input
+        id="q"
+        class="calc-input font-mono text-sm"
+        placeholder="如 65、41、A、换行…"
+        spellcheck="false"
+      />
+    </div>
+
+    <!-- 按键实时探测 -->
+    <div>
+      <span class="calc-label">按键探测</span>
+      <div
+        id="key-probe"
+        tabindex="0"
+        role="button"
+        class="calc-input flex cursor-pointer flex-col items-center justify-center gap-1 py-6 text-center"
+      >
+        <span class="text-sm text-slate-500 dark:text-slate-400">点击此处，按下任意键</span>
+        <span id="probe-result" class="font-mono text-xs text-slate-400"></span>
+      </div>
+    </div>
+
+    <div class="text-xs leading-relaxed text-slate-400">
+      <p class="mb-1 font-semibold text-slate-500 dark:text-slate-400">说明</p>
+      <p>· ASCII 共 128 个字符（0~127），本表额外收录扩展 Latin-1（128~255）</p>
+      <p>· 控制字符（0~31 与 127）不可打印，以助记名展示</p>
+      <p>· 键值表中的 code 为物理键位，key 为逻辑键值，跨键盘布局更稳定</p>
+    </div>
+  </div>
+
+  <span slot="output-tools" id="count" class="text-xs text-slate-400"></span>
+
+  <div slot="output" class="min-h-0 flex-1 overflow-auto">
+    <!-- ASCII 表 -->
+    <table class="w-full text-left text-sm" id="ascii-table">
+      <thead class="sticky top-0 bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <tr>
+          <th class="px-3 py-2">Dec</th>
+          <th class="px-3 py-2">Hex</th>
+          <th class="px-3 py-2">Bin</th>
+          <th class="px-3 py-2">字符</th>
+          <th class="px-3 py-2">说明</th>
+        </tr>
+      </thead>
+      <tbody id="ascii-body" class="font-mono"></tbody>
+    </table>
+    <!-- 键值表 -->
+    <table class="hidden w-full text-left text-sm" id="keys-table">
+      <thead class="sticky top-0 bg-slate-100 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+        <tr>
+          <th class="px-3 py-2">code</th>
+          <th class="px-3 py-2">key</th>
+          <th class="px-3 py-2">说明</th>
+        </tr>
+      </thead>
+      <tbody id="keys-body" class="font-mono"></tbody>
+    </table>
+    <!-- 数据岛：大表数据经 JSON 注入，避免 define:vars 导致脚本不打包 -->
+    <script
+      type="application/json"
+      id="ascii-data"
+      set:html={JSON.stringify({ ascii: ASCII_TABLE, keys: KEY_CODES }).replace(/</g, '\\u003c')}
+    ></script>
+  </div>
+</Tool>
+
+<script>
+  type AsciiEntry = { dec: number; hex: string; bin: string; char?: string; desc: string };
+  type KeyEntry = { code: string; key: string; note: string };
+
+  const dataEl = document.getElementById('ascii-data');
+  const DATA = JSON.parse(dataEl?.textContent ?? '{}') as { ascii: AsciiEntry[]; keys: KeyEntry[] };
+  const ASCII_TABLE: AsciiEntry[] = DATA.ascii ?? [];
+  const KEY_CODES: KeyEntry[] = DATA.keys ?? [];
+
+  const asciiBody = document.getElementById('ascii-body')!;
+  const keysBody = document.getElementById('keys-body')!;
+  const asciiTable = document.getElementById('ascii-table')!;
+  const keysTable = document.getElementById('keys-table')!;
+  const q = document.getElementById('q') as HTMLInputElement;
+  const tableSwitch = document.getElementById('table-switch') as HTMLSelectElement;
+  const count = document.getElementById('count')!;
+
+  const ESC_MAP: Record<string, string> = { '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": 'apos' };
+  function esc(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => `&${ESC_MAP[c]};`);
+  }
+
+  function renderAscii(filter: string) {
+    const f = filter.trim().toLowerCase();
+    const rows = ASCII_TABLE.filter((e) => {
+      if (!f) return true;
+      return (
+        String(e.dec) === f ||
+        e.hex.toLowerCase() === f ||
+        e.bin.includes(f) ||
+        (e.char && e.char.toLowerCase() === f) ||
+        e.desc.toLowerCase().includes(f)
+      );
+    });
+    asciiBody.innerHTML = rows
+      .map(
+        (e, i) => `<tr class="${i % 2 === 1 ? 'bg-slate-50 dark:bg-slate-800/40' : ''}">
+          <td class="px-3 py-1.5">${e.dec}</td>
+          <td class="px-3 py-1.5">${e.hex}</td>
+          <td class="px-3 py-1.5 text-slate-400">${e.bin}</td>
+          <td class="px-3 py-1.5 font-semibold">${e.char ? esc(e.char) : '·'}</td>
+          <td class="px-3 py-1.5 font-sans text-slate-500 dark:text-slate-400">${esc(e.desc)}</td>
+        </tr>`
+      )
+      .join('');
+    count.textContent = `共 ${rows.length} 行`;
+  }
+
+  function renderKeys(filter: string) {
+    const f = filter.trim().toLowerCase();
+    const rows = KEY_CODES.filter(
+      (k) => !f || k.code.toLowerCase().includes(f) || k.key.toLowerCase().includes(f) || k.note.includes(f)
+    );
+    keysBody.innerHTML = rows
+      .map(
+        (k, i) => `<tr class="${i % 2 === 1 ? 'bg-slate-50 dark:bg-slate-800/40' : ''}">
+          <td class="px-3 py-1.5">${k.code}</td>
+          <td class="px-3 py-1.5 font-semibold">${k.key === ' ' ? 'Space' : esc(k.key)}</td>
+          <td class="px-3 py-1.5 font-sans text-slate-500 dark:text-slate-400">${esc(k.note)}</td>
+        </tr>`
+      )
+      .join('');
+    count.textContent = `共 ${rows.length} 行`;
+  }
+
+  function render() {
+    if (tableSwitch.value === 'ascii') {
+      asciiTable.classList.remove('hidden');
+      keysTable.classList.add('hidden');
+      renderAscii(q.value);
+    } else {
+      asciiTable.classList.add('hidden');
+      keysTable.classList.remove('hidden');
+      renderKeys(q.value);
+    }
+  }
+
+  q.addEventListener('input', render);
+  tableSwitch.addEventListener('change', render);
+
+  // 按键探测
+  const probe = document.getElementById('key-probe')!;
+  const probeResult = document.getElementById('probe-result')!;
+  probe.addEventListener('keydown', (e) => {
+    e.preventDefault();
+    probeResult.innerHTML = `code: <b class="text-brand-600 dark:text-brand-300">${e.code}</b> · key: <b class="text-brand-600 dark:text-brand-300">${e.key === ' ' ? 'Space' : esc(e.key)}</b> · keyCode: ${e.keyCode}`;
+  });
+  probe.addEventListener('click', () => (probe as HTMLElement).focus());
+
+  render();
+</script>

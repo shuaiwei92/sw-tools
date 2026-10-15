@@ -1,0 +1,431 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+
+const FILTER_SLIDERS: { key: 'blur' | 'brightness' | 'contrast' | 'grayscale' | 'hueRotate' | 'invert' | 'opacity' | 'saturate' | 'sepia'; label: string; min: number; max: number; unit: string }[] = [
+  { key: 'blur', label: '模糊 blur', min: 0, max: 30, unit: 'px' },
+  { key: 'brightness', label: '亮度 brightness', min: 0, max: 200, unit: '%' },
+  { key: 'contrast', label: '对比度 contrast', min: 0, max: 200, unit: '%' },
+  { key: 'grayscale', label: '灰度 grayscale', min: 0, max: 100, unit: '%' },
+  { key: 'hueRotate', label: '色相旋转 hue-rotate', min: 0, max: 360, unit: 'deg' },
+  { key: 'invert', label: '反色 invert', min: 0, max: 100, unit: '%' },
+  { key: 'opacity', label: '不透明度 opacity', min: 0, max: 100, unit: '%' },
+  { key: 'saturate', label: '饱和度 saturate', min: 0, max: 200, unit: '%' },
+  { key: 'sepia', label: '棕褐 sepia', min: 0, max: 100, unit: '%' },
+];
+---
+
+<Tool
+  title="CSS 阴影 / 滤镜生成器 · sw-tools"
+  toolName="CSS 阴影 / 滤镜生成器"
+  description="可视化生成 box-shadow（多层）、text-shadow 与 filter：实时预览、参数微调、常用预设，一键复制 CSS 代码。"
+  categoryHref="/#color"
+  categoryName="取色 / 配色"
+  inputLabel="参数调节"
+  outputLabel="预览与代码"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div class="seg" id="mode-seg">
+      <button data-mode="box" class="active">box-shadow</button>
+      <button data-mode="text">text-shadow</button>
+      <button data-mode="filter">filter</button>
+    </div>
+
+    <!-- box-shadow 面板 -->
+    <div id="panel-box" class="space-y-3">
+      <div>
+        <span class="calc-label">图层（点击切换，× 删除）</span>
+        <div class="flex flex-wrap items-center gap-1.5" id="layer-row"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="calc-label" for="box-x">水平偏移 x</label>
+          <input id="box-x" type="number" class="calc-input text-sm" value="0" step="1" />
+        </div>
+        <div>
+          <label class="calc-label" for="box-y">垂直偏移 y</label>
+          <input id="box-y" type="number" class="calc-input text-sm" value="4" step="1" />
+        </div>
+        <div>
+          <label class="calc-label" for="box-blur">模糊 blur</label>
+          <input id="box-blur" type="number" class="calc-input text-sm" value="8" min="0" step="1" />
+        </div>
+        <div>
+          <label class="calc-label" for="box-spread">扩展 spread</label>
+          <input id="box-spread" type="number" class="calc-input text-sm" value="0" step="1" />
+        </div>
+      </div>
+      <div class="flex items-end gap-2">
+        <div>
+          <label class="calc-label" for="box-color">颜色</label>
+          <input id="box-color" type="color" value="#000000" class="h-9 w-14 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <label class="calc-label" for="box-color-text">颜色值（支持 rgba）</label>
+          <input id="box-color-text" type="text" spellcheck="false" class="calc-input font-mono text-xs" value="rgba(0,0,0,0.25)" />
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+        <input type="checkbox" class="accent-brand-600" id="box-inset" />
+        <span>inset 内阴影</span>
+      </label>
+      <div class="flex gap-2">
+        <button class="tool-btn tool-btn-sm" id="box-add" title="添加图层"><Icon name="sample" /><span>添加图层</span></button>
+        <button class="tool-btn tool-btn-sm" id="box-reset" title="恢复默认图层"><Icon name="refresh" /><span>重置</span></button>
+      </div>
+    </div>
+
+    <!-- text-shadow 面板 -->
+    <div id="panel-text" class="hidden space-y-3">
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="calc-label" for="text-x">x</label>
+          <input id="text-x" type="number" class="calc-input text-sm" value="1" step="1" />
+        </div>
+        <div>
+          <label class="calc-label" for="text-y">y</label>
+          <input id="text-y" type="number" class="calc-input text-sm" value="2" step="1" />
+        </div>
+        <div>
+          <label class="calc-label" for="text-blur">模糊</label>
+          <input id="text-blur" type="number" class="calc-input text-sm" value="4" min="0" step="1" />
+        </div>
+      </div>
+      <div class="flex items-end gap-2">
+        <div>
+          <label class="calc-label" for="text-color">颜色</label>
+          <input id="text-color" type="color" value="#000000" class="h-9 w-14 cursor-pointer rounded-md border border-slate-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900" />
+        </div>
+        <div class="min-w-0 flex-1">
+          <label class="calc-label" for="text-color-text">颜色值</label>
+          <input id="text-color-text" type="text" spellcheck="false" class="calc-input font-mono text-xs" value="rgba(0,0,0,0.35)" />
+        </div>
+      </div>
+      <div>
+        <span class="calc-label">预设</span>
+        <div class="flex flex-wrap gap-1.5" id="text-presets"></div>
+      </div>
+    </div>
+
+    <!-- filter 面板 -->
+    <div id="panel-filter" class="hidden space-y-2.5">
+      {FILTER_SLIDERS.map((s) => (
+        <div>
+          <span class="calc-label flex justify-between">
+            <span>{s.label}</span>
+            <span class="font-mono text-slate-400" id={`fv-${s.key}`}>0</span>
+          </span>
+          <input id={`sl-${s.key}`} type="range" min={s.min} max={s.max} value="0" class="w-full accent-brand-600" />
+        </div>
+      ))}
+      <button class="tool-btn tool-btn-sm" id="filter-reset" title="恢复默认值"><Icon name="refresh" /><span>恢复默认</span></button>
+    </div>
+
+    <!-- 阴影预设（box 模式） -->
+    <div id="box-presets">
+      <span class="calc-label">阴影预设</span>
+      <div class="flex flex-wrap gap-1.5" id="shadow-presets"></div>
+    </div>
+    <div id="filter-presets" class="hidden">
+      <span class="calc-label">滤镜预设</span>
+      <div class="flex flex-wrap gap-1.5" id="filter-preset-row"></div>
+    </div>
+  </div>
+
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="css-prop">box-shadow</span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy" title="复制 CSS"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 预览 -->
+    <div class="flex min-h-40 flex-1 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 p-6 dark:border-slate-700 dark:bg-slate-900" id="stage">
+      <div id="preview-box" class="w-64 rounded-2xl bg-white px-6 py-5 text-center dark:bg-slate-800">
+        <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">阴影预览卡片</p>
+        <p class="mt-1 text-xs text-slate-400">Shadow Preview · sw-tools</p>
+      </div>
+      <p id="preview-text" class="hidden text-4xl font-bold text-white">阴影文字 Aa</p>
+      <div id="preview-filter" class="hidden h-32 w-56 rounded-xl" style="background:linear-gradient(135deg,#f59e0b,#ec4899 45%,#8b5cf6)"></div>
+    </div>
+
+    <!-- CSS 代码 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">CSS</span>
+      <pre id="css-out" class="mt-1 overflow-x-auto rounded-lg bg-slate-50 p-2 font-mono text-xs leading-relaxed text-slate-700 dark:bg-slate-900 dark:text-slate-200"></pre>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import {
+    buildBoxShadow,
+    buildTextShadow,
+    buildFilter,
+    parseFilter,
+    DEFAULT_LAYER,
+    DEFAULT_FILTER,
+    SHADOW_PRESETS,
+    FILTER_PRESETS,
+    type ShadowLayer,
+    type FilterSpec,
+  } from '../../lib/color/shadow';
+
+  const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+  const num = (id: string): HTMLInputElement => document.getElementById(id) as HTMLInputElement;
+  const txt = (id: string): HTMLInputElement => document.getElementById(id) as HTMLInputElement;
+
+  const TEXT_PRESETS: { name: string; shadow: { x: number; y: number; blur: number; color: string } }[] = [
+    { name: '柔和投影', shadow: { x: 1, y: 2, blur: 4, color: 'rgba(0,0,0,0.35)' } },
+    { name: '白色描边影', shadow: { x: 0, y: 0, blur: 6, color: 'rgba(255,255,255,0.9)' } },
+    { name: '霓虹文字', shadow: { x: 0, y: 0, blur: 12, color: 'rgba(56,189,248,0.9)' } },
+    { name: '长投影', shadow: { x: 6, y: 6, blur: 0, color: 'rgba(15,23,42,0.25)' } },
+  ];
+
+  type Mode = 'box' | 'text' | 'filter';
+
+  const state: {
+    mode: Mode;
+    layers: ShadowLayer[];
+    active: number;
+    text: { x: number; y: number; blur: number; color: string };
+    filter: FilterSpec;
+  } = {
+    mode: 'box',
+    layers: [{ ...DEFAULT_LAYER }],
+    active: 0,
+    text: { x: 1, y: 2, blur: 4, color: 'rgba(0,0,0,0.35)' },
+    filter: { ...DEFAULT_FILTER },
+  };
+
+  const previewBox = $('preview-box');
+  const previewText = $('preview-text');
+  const previewFilter = $('preview-filter');
+
+  function currentCss(): string {
+    if (state.mode === 'box') return `box-shadow: ${buildBoxShadow(state.layers)};`;
+    if (state.mode === 'text') return `text-shadow: ${buildTextShadow(state.text)};`;
+    return `filter: ${buildFilter(state.filter)};`;
+  }
+
+  function renderLayerChips(): void {
+    const row = $('layer-row');
+    row.innerHTML = '';
+    state.layers.forEach((layer, i) => {
+      const chip = document.createElement('button');
+      chip.className = `tool-btn tool-btn-sm ${i === state.active ? 'tree-btn-active' : ''}`;
+      chip.title = `图层 ${i + 1}：${layer.color}${layer.inset ? '（inset）' : ''}`;
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = layer.color;
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(`L${i + 1}`));
+      chip.addEventListener('click', () => {
+        state.active = i;
+        syncBoxInputs();
+        render();
+      });
+      row.appendChild(chip);
+      if (state.layers.length > 1) {
+        const del = document.createElement('button');
+        del.className = 'tool-btn tool-btn-sm';
+        del.title = `删除图层 ${i + 1}`;
+        del.textContent = '×';
+        del.addEventListener('click', () => {
+          state.layers.splice(i, 1);
+          if (state.active >= state.layers.length) state.active = state.layers.length - 1;
+          syncBoxInputs();
+          render();
+        });
+        row.appendChild(del);
+      }
+    });
+    const add = document.createElement('button');
+    add.className = 'tool-btn tool-btn-sm';
+    add.title = '添加图层';
+    add.textContent = '＋';
+    add.addEventListener('click', () => {
+      state.layers.push({ ...DEFAULT_LAYER, y: state.layers.length * 2 });
+      state.active = state.layers.length - 1;
+      syncBoxInputs();
+      render();
+    });
+    row.appendChild(add);
+  }
+
+  function syncBoxInputs(): void {
+    const l = state.layers[state.active];
+    num('box-x').value = String(l.x);
+    num('box-y').value = String(l.y);
+    num('box-blur').value = String(l.blur);
+    num('box-spread').value = String(l.spread);
+    txt('box-color-text').value = l.color;
+    (document.getElementById('box-inset') as HTMLInputElement).checked = l.inset;
+    // 颜色选择器只接受 #rrggbb
+    const colorInput = document.getElementById('box-color') as HTMLInputElement;
+    colorInput.value = /^#[0-9a-f]{6}$/i.test(l.color) ? l.color : '#000000';
+  }
+
+  function syncFilterInputs(): void {
+    for (const s of ['blur', 'brightness', 'contrast', 'grayscale', 'hueRotate', 'invert', 'opacity', 'saturate', 'sepia'] as const) {
+      num(`sl-${s}`).value = String(state.filter[s]);
+      $('fv-' + s).textContent = String(state.filter[s]);
+    }
+  }
+
+  function render(): void {
+    // 面板显隐
+    $('panel-box').classList.toggle('hidden', state.mode !== 'box');
+    $('panel-text').classList.toggle('hidden', state.mode !== 'text');
+    $('panel-filter').classList.toggle('hidden', state.mode !== 'filter');
+    $('box-presets').classList.toggle('hidden', state.mode !== 'box');
+    $('filter-presets').classList.toggle('hidden', state.mode !== 'filter');
+    previewBox.classList.toggle('hidden', state.mode !== 'box');
+    previewText.classList.toggle('hidden', state.mode !== 'text');
+    previewFilter.classList.toggle('hidden', state.mode !== 'filter');
+    $('css-prop').textContent = state.mode === 'box' ? 'box-shadow' : state.mode === 'text' ? 'text-shadow' : 'filter';
+
+    if (state.mode === 'box') {
+      previewBox.style.boxShadow = buildBoxShadow(state.layers);
+      renderLayerChips();
+    } else if (state.mode === 'text') {
+      previewText.style.textShadow = buildTextShadow(state.text);
+    } else {
+      previewFilter.style.filter = buildFilter(state.filter);
+    }
+    $('css-out').textContent = currentCss();
+  }
+
+  // 模式切换
+  document.querySelectorAll<HTMLButtonElement>('#mode-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.mode = btn.dataset.mode as Mode;
+      document.querySelectorAll('#mode-seg button').forEach((b) => b.classList.toggle('active', b === btn));
+      render();
+    });
+  });
+
+  // box 控件
+  for (const id of ['box-x', 'box-y', 'box-blur', 'box-spread'] as const) {
+    num(id).addEventListener('input', () => {
+      const key = id.slice(4) as 'x' | 'y' | 'blur' | 'spread';
+      const v = Number(num(id).value);
+      state.layers[state.active][key] = Number.isFinite(v) ? v : 0;
+      render();
+    });
+  }
+  txt('box-color-text').addEventListener('input', () => {
+    state.layers[state.active].color = txt('box-color-text').value.trim() || 'transparent';
+    render();
+  });
+  (document.getElementById('box-color') as HTMLInputElement).addEventListener('input', (e) => {
+    state.layers[state.active].color = (e.target as HTMLInputElement).value;
+    syncBoxInputs();
+    render();
+  });
+  (document.getElementById('box-inset') as HTMLInputElement).addEventListener('change', (e) => {
+    state.layers[state.active].inset = (e.target as HTMLInputElement).checked;
+    render();
+  });
+  $('box-add').addEventListener('click', () => {
+    state.layers.push({ ...DEFAULT_LAYER });
+    state.active = state.layers.length - 1;
+    syncBoxInputs();
+    render();
+  });
+  $('box-reset').addEventListener('click', () => {
+    state.layers = [{ ...DEFAULT_LAYER }];
+    state.active = 0;
+    syncBoxInputs();
+    render();
+  });
+
+  // text 控件
+  for (const id of ['text-x', 'text-y', 'text-blur'] as const) {
+    num(id).addEventListener('input', () => {
+      const key = id.slice(5) as 'x' | 'y' | 'blur';
+      const v = Number(num(id).value);
+      state.text[key] = Number.isFinite(v) ? v : 0;
+      render();
+    });
+  }
+  txt('text-color-text').addEventListener('input', () => {
+    state.text.color = txt('text-color-text').value.trim() || 'transparent';
+    render();
+  });
+  (document.getElementById('text-color') as HTMLInputElement).addEventListener('input', (e) => {
+    state.text.color = (e.target as HTMLInputElement).value;
+    txt('text-color-text').value = state.text.color;
+    render();
+  });
+
+  // filter 控件
+  for (const s of ['blur', 'brightness', 'contrast', 'grayscale', 'hueRotate', 'invert', 'opacity', 'saturate', 'sepia'] as const) {
+    num(`sl-${s}`).addEventListener('input', () => {
+      const v = Number(num(`sl-${s}`).value);
+      state.filter[s] = Number.isFinite(v) ? v : 0;
+      $('fv-' + s).textContent = num(`sl-${s}`).value;
+      render();
+    });
+  }
+  $('filter-reset').addEventListener('click', () => {
+    state.filter = { ...DEFAULT_FILTER };
+    syncFilterInputs();
+    render();
+  });
+
+  // 预设（阴影 / 文本 / 滤镜）
+  const shadowRow = $('shadow-presets');
+  for (const p of SHADOW_PRESETS) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-chip';
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => {
+      state.layers = p.layers.map((l) => ({ ...l }));
+      state.active = 0;
+      syncBoxInputs();
+      render();
+    });
+    shadowRow.appendChild(btn);
+  }
+  const textRow = $('text-presets');
+  for (const p of TEXT_PRESETS) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-chip';
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => {
+      state.text = { ...p.shadow };
+      num('text-x').value = String(p.shadow.x);
+      num('text-y').value = String(p.shadow.y);
+      num('text-blur').value = String(p.shadow.blur);
+      txt('text-color-text').value = p.shadow.color;
+      render();
+    });
+    textRow.appendChild(btn);
+  }
+  const filterRow = $('filter-preset-row');
+  for (const p of FILTER_PRESETS) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-chip';
+    btn.textContent = p.name;
+    btn.addEventListener('click', () => {
+      state.filter = { ...DEFAULT_FILTER, ...p.spec };
+      syncFilterInputs();
+      render();
+    });
+    filterRow.appendChild(btn);
+  }
+
+  // 复制
+  $('btn-copy').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(currentCss());
+    } catch {
+      /* 剪贴板不可用时忽略 */
+    }
+  });
+
+  syncBoxInputs();
+  syncFilterInputs();
+  render();
+</script>

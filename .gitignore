@@ -42,3 +42,6 @@ coverage
 _diag.txt
 diag*.txt
 install*.txt
+
+# WorkBuddy (project-scoped memory / settings, not user source)
+.workbuddy

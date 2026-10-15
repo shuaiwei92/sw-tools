@@ -1,0 +1,152 @@
+---
+import Tool from '../../layouts/Tool.astro';
+
+const BARCODE_TYPES = [
+  { id: 'CODE128', name: 'CODE128（通用，支持 ASCII）' },
+  { id: 'CODE39', name: 'CODE39（字母数字 + 少量符号）' },
+  { id: 'EAN13', name: 'EAN-13（13 位商品码）' },
+  { id: 'EAN8', name: 'EAN-8（8 位商品码）' },
+  { id: 'UPC', name: 'UPC-A（12 位商品码）' },
+  { id: 'ITF14', name: 'ITF-14（物流码）' },
+];
+---
+
+<Tool
+  title="条形码生成 · sw-tools"
+  toolName="条形码生成"
+  description="CODE128 / CODE39 / EAN-13 / EAN-8 / UPC-A / ITF-14 条形码生成，SVG 矢量输出可下载。"
+  categoryHref="/#generator"
+  categoryName="生成器"
+  inputLabel="参数"
+  outputLabel="预览"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="bc-type">条码类型</label>
+      <select id="bc-type" class="calc-input text-sm">
+        {BARCODE_TYPES.map((t) => <option value={t.id}>{t.name}</option>)}
+      </select>
+    </div>
+    <div>
+      <label class="calc-label" for="bc-value">内容</label>
+      <input id="bc-value" class="calc-input font-mono text-sm" value="SW-TOOLS-2026" spellcheck="false" />
+      <p id="bc-hint" class="mt-1 text-xs text-slate-400"></p>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="bc-width">模块宽度</label>
+        <input id="bc-width" type="number" min="1" max="4" step="0.5" value="2" class="calc-input text-sm" />
+      </div>
+      <div>
+        <label class="calc-label" for="bc-height">高度（px）</label>
+        <input id="bc-height" type="number" min="20" max="200" value="80" class="calc-input text-sm" />
+      </div>
+    </div>
+    <label class="flex cursor-pointer items-center gap-1.5 text-sm text-slate-500">
+      <input type="checkbox" id="bc-text" class="h-4 w-4 accent-brand-600" checked />
+      显示文字（human readable）
+    </label>
+    <p id="bc-error" class="hidden text-xs text-rose-600 dark:text-rose-400"></p>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto p-4">
+    <div class="w-full rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700" id="bc-stage">
+      <svg id="bc-svg"></svg>
+    </div>
+    <div class="flex gap-2">
+      <button id="bc-download" class="tool-btn tool-btn-sm" title="下载 SVG">下载 SVG</button>
+      <button id="bc-download-png" class="tool-btn tool-btn-sm" title="下载 PNG">下载 PNG</button>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import JsBarcode from 'jsbarcode';
+
+  const svg = document.getElementById('bc-svg') as unknown as SVGElement;
+  const type = document.getElementById('bc-type') as HTMLSelectElement;
+  const value = document.getElementById('bc-value') as HTMLInputElement;
+  const width = document.getElementById('bc-width') as HTMLInputElement;
+  const height = document.getElementById('bc-height') as HTMLInputElement;
+  const showText = document.getElementById('bc-text') as HTMLInputElement;
+  const error = document.getElementById('bc-error')!;
+  const hint = document.getElementById('bc-hint')!;
+
+  const HINTS: Record<string, string> = {
+    CODE128: '支持全部 ASCII 字符，长度不限',
+    CODE39: '仅限 0-9、A-Z 与 - . $ / + % 空格',
+    EAN13: '必须为 12 位数字（校验位自动计算）或 13 位（含校验位）',
+    EAN8: '必须为 7 位数字（校验位自动计算）或 8 位（含校验位）',
+    UPC: '必须为 11 位数字（校验位自动计算）或 12 位（含校验位）',
+    ITF14: '必须为 13 位数字（校验位自动计算）或 14 位（含校验位）',
+  };
+
+  function render() {
+    hint.textContent = HINTS[type.value] ?? '';
+    error.classList.add('hidden');
+    const v = value.value.trim();
+    if (!v) {
+      svg.innerHTML = '';
+      return;
+    }
+    try {
+      JsBarcode(svg, v, {
+        format: type.value,
+        width: Math.max(1, Number(width.value) || 2),
+        height: Math.max(20, Number(height.value) || 80),
+        displayValue: showText.checked,
+        font: 'monospace',
+        fontSize: 16,
+        margin: 10,
+        valid: (ok: boolean) => {
+          if (!ok) throw new Error('内容不符合该条码格式要求');
+        },
+      });
+      // 让 SVG 自适应容器宽度
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.setAttribute('style', 'width:100%;height:auto;');
+    } catch (e) {
+      error.textContent = (e as Error).message || '生成失败';
+      error.classList.remove('hidden');
+      svg.innerHTML = '';
+    }
+  }
+
+  [type, value, width, height, showText].forEach((el) => el.addEventListener('input', render));
+  type.addEventListener('change', render);
+
+  function downloadSvg() {
+    const clone = svg.cloneNode(true) as SVGElement;
+    const s = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([s], { type: 'image/svg+xml' });
+    triggerDownload(URL.createObjectURL(blob), 'barcode.svg');
+  }
+  function downloadPng() {
+    const s = new XMLSerializer().serializeToString(svg);
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 1000;
+      c.height = Math.round((1000 * img.height) / img.width) + 20;
+      const ctx = c.getContext('2d')!;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 10);
+      triggerDownload(c.toDataURL('image/png'), 'barcode.png');
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(s)));
+  }
+  function triggerDownload(href: string, name: string) {
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = name;
+    a.click();
+  }
+
+  document.getElementById('bc-download')!.addEventListener('click', downloadSvg);
+  document.getElementById('bc-download-png')!.addEventListener('click', downloadPng);
+
+  render();
+</script>

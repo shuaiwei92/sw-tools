@@ -1,0 +1,130 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+<Tool
+  title="JSON 转表格 · sw-tools"
+  toolName="JSON 转表格"
+  description="把 JSON 渲染为表格：对象数组 → 字段列表，对象 / 标量 → 键值表；可导出 Markdown。"
+  categoryHref="/#data"
+  categoryName="数据工具"
+  inputLabel="JSON"
+  outputLabel="表格预览"
+  columns="left-wide"
+>
+  <div slot="input-tools" class="flex flex-wrap items-center gap-1.5">
+    <label class="flex items-center gap-1 text-xs">模式
+      <select id="mode" class="calc-input py-1">
+        <option value="auto">自动</option>
+        <option value="list">列表（对象数组）</option>
+        <option value="kv">键值（对象 / 标量）</option>
+      </select>
+    </label>
+    <button id="gen-btn" class="tool-btn tool-btn-sm" title="生成表格">生成</button>
+    <button id="sample-btn" class="tool-btn tool-btn-sm" title="载入示例">示例</button>
+  </div>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-2 p-3">
+    <textarea
+      id="json-input"
+      class="min-h-0 flex-1 resize-none rounded-lg border border-slate-300 bg-white p-2 font-mono text-sm dark:border-slate-700 dark:bg-slate-900"
+      spellcheck="false"
+      placeholder="在此粘贴 JSON…"
+    ></textarea>
+    <p class="text-[11px] leading-relaxed text-slate-400">自动模式下：对象数组渲染为字段列表，单对象 / 标量渲染为键值表；嵌套对象在单元格内以 JSON 展示。</p>
+  </div>
+
+  <div slot="output-tools" class="flex flex-wrap items-center gap-1.5">
+    <button id="copy-md" class="tool-btn tool-btn-sm" title="复制 Markdown">复制 MD</button>
+    <button id="exp-md" class="tool-btn tool-btn-sm" title="下载 Markdown">导出 MD</button>
+    <button id="copy-html" class="tool-btn tool-btn-sm" title="复制 HTML">复制 HTML</button>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col p-3">
+    <p id="status" class="mb-2 text-xs text-slate-400">&nbsp;</p>
+    <div id="table-wrap" class="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      <p class="p-6 text-center text-sm text-slate-400">在左侧粘贴 JSON 并点击「生成」</p>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { jsonToTableModel, tableToHtml, tableToMarkdown, type TableModel } from '../../lib/data/jsonTable';
+
+  const SAMPLE = '[\n  {"name":"Alice","age":30,"city":"Beijing"},\n  {"name":"Bob","age":25,"city":"Shanghai"},\n  {"name":"Chen","age":28,"city":"Guangzhou"}\n]';
+
+  const input = document.getElementById('json-input') as HTMLTextAreaElement;
+  const modeSel = document.getElementById('mode') as HTMLSelectElement;
+  const wrap = document.getElementById('table-wrap') as HTMLDivElement;
+  const status = document.getElementById('status') as HTMLParagraphElement;
+
+  let current: TableModel | null = null;
+
+  function setStatus(msg: string) {
+    status.textContent = msg || ' ';
+  }
+
+  function generate() {
+    const text = input.value;
+    if (!text.trim()) {
+      current = null;
+      wrap.innerHTML = '<p class="p-6 text-center text-sm text-slate-400">在左侧粘贴 JSON 并点击「生成」</p>';
+      setStatus('请输入 JSON');
+      return;
+    }
+    try {
+      current = jsonToTableModel(text, modeSel.value as 'auto' | 'list' | 'kv');
+      wrap.innerHTML = tableToHtml(current);
+      const note = current.kind === 'list' ? '列表（对象数组）' : '键值表';
+      setStatus(`${note}：${current.headers.length} 列 × ${current.rows.length} 行`);
+    } catch (e) {
+      current = null;
+      wrap.innerHTML = '<p class="p-6 text-center text-sm text-rose-500">JSON 解析失败</p>';
+      setStatus('✗ ' + (e as Error).message);
+    }
+  }
+
+  function download(filename: string, content: string, mime: string) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  document.getElementById('gen-btn')!.addEventListener('click', generate);
+  document.getElementById('sample-btn')!.addEventListener('click', () => {
+    input.value = SAMPLE;
+    generate();
+  });
+  modeSel.addEventListener('change', () => {
+    if (input.value.trim()) generate();
+  });
+  document.getElementById('copy-md')!.addEventListener('click', async () => {
+    if (!current) return;
+    try {
+      await navigator.clipboard.writeText(tableToMarkdown(current));
+      setStatus('已复制 Markdown');
+    } catch {
+      setStatus('复制失败：浏览器拒绝了剪贴板权限');
+    }
+  });
+  document.getElementById('exp-md')!.addEventListener('click', () => {
+    if (!current) return;
+    download('table.md', tableToMarkdown(current), 'text/markdown');
+    setStatus('已导出 Markdown');
+  });
+  document.getElementById('copy-html')!.addEventListener('click', async () => {
+    if (!current) return;
+    try {
+      await navigator.clipboard.writeText(tableToHtml(current));
+      setStatus('已复制 HTML 表格');
+    } catch {
+      setStatus('复制失败：浏览器拒绝了剪贴板权限');
+    }
+  });
+
+  input.value = SAMPLE;
+  generate();
+</script>

@@ -1,0 +1,123 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="单位换算 · sw-tools"
+  toolName="单位换算"
+  description="长度 / 质量 / 温度 / 面积 / 体积 / 速度 / 时间 / 数据 / 压力 / 能量 / 角度 / 功率 / 油耗，纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="转换"
+  outputLabel="全部单位对照"
+>
+  <button slot="input-tools" id="unit-swap" class="tool-btn tool-btn-sm" title="交换源单位与目标单位">交换</button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div id="unit-cats" class="seg"></div>
+    <div>
+      <label class="calc-label" for="unit-val">数值</label>
+      <input id="unit-val" type="number" step="any" class="calc-input" value="1" />
+    </div>
+    <div>
+      <label class="calc-label" for="unit-from">源单位</label>
+      <select id="unit-from" class="calc-input"></select>
+    </div>
+    <div>
+      <label class="calc-label" for="unit-to">目标单位</label>
+      <select id="unit-to" class="calc-input"></select>
+    </div>
+    <div class="result-card">
+      <div class="text-xs text-slate-500 dark:text-slate-400" id="unit-rtitle">转换结果</div>
+      <div id="unit-out" class="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-300">—</div>
+    </div>
+  </div>
+
+  <div slot="output" id="unit-all" class="zebra flex min-h-0 flex-1 flex-col overflow-y-auto"></div>
+</Tool>
+
+<script>
+  import { UNIT_CATEGORIES, convertUnit } from '../../lib/calc/units';
+  import { fmt } from '../../lib/calc/format';
+
+  const catsEl = document.getElementById('unit-cats') as HTMLDivElement;
+  const val = document.getElementById('unit-val') as HTMLInputElement;
+  const fromSel = document.getElementById('unit-from') as HTMLSelectElement;
+  const toSel = document.getElementById('unit-to') as HTMLSelectElement;
+  const rtitle = document.getElementById('unit-rtitle') as HTMLDivElement;
+  const out = document.getElementById('unit-out') as HTMLDivElement;
+  const all = document.getElementById('unit-all') as HTMLDivElement;
+
+  let catIndex = 0;
+
+  function fillUnits() {
+    const cat = UNIT_CATEGORIES[catIndex];
+    fromSel.innerHTML = cat.units.map((u) => `<option value="${u.id}">${u.name}</option>`).join('');
+    toSel.innerHTML = fromSel.innerHTML;
+    // 默认源选第一个，目标选第二个（或第一个）
+    const def = cat.units.length > 1 ? cat.units[1].id : cat.units[0].id;
+    fromSel.value = cat.units[0].id;
+    toSel.value = def;
+  }
+
+  function compute() {
+    const cat = UNIT_CATEGORIES[catIndex];
+    const v = parseFloat(val.value);
+    if (Number.isNaN(v)) {
+      out.textContent = '—';
+      all.innerHTML = '';
+      return;
+    }
+    const f = fromSel.value;
+    const t = toSel.value;
+    try {
+      const r = convertUnit(cat.id, f, t, v);
+      rtitle.textContent = `${fmt(v)} ${cat.units.find((u) => u.id === f)?.name ?? f} = `;
+      out.textContent = `${fmt(r)} ${cat.units.find((u) => u.id === t)?.name ?? t}`;
+    } catch (e) {
+      out.textContent = '✗ ' + (e as Error).message;
+    }
+    // 全部单位对照：行高自适应拉伸占满右栏；数量多出容器时保持内容高度并滚动
+    all.innerHTML = cat.units
+      .map((u) => {
+        let cv: string;
+        try {
+          cv = fmt(convertUnit(cat.id, f, u.id, v));
+        } catch {
+          cv = '—';
+        }
+        const active = u.id === t ? ' font-semibold text-brand-600 dark:text-brand-300' : '';
+        return `<div class="res-row flex-1 shrink-0${active}"><span class="k">${u.name}</span><span class="v font-mono">${cv}</span></div>`;
+      })
+      .join('');
+  }
+
+  function buildCats() {
+    catsEl.innerHTML = '';
+    UNIT_CATEGORIES.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.textContent = c.name;
+      if (i === catIndex) b.classList.add('active');
+      b.addEventListener('click', () => {
+        catIndex = i;
+        buildCats();
+        fillUnits();
+        compute();
+      });
+      catsEl.appendChild(b);
+    });
+  }
+
+  document.getElementById('unit-swap')?.addEventListener('click', () => {
+    const f = fromSel.value;
+    fromSel.value = toSel.value;
+    toSel.value = f;
+    compute();
+  });
+
+  [val, fromSel, toSel].forEach((el) => el.addEventListener('input', compute));
+  [val, fromSel, toSel].forEach((el) => el.addEventListener('change', compute));
+  buildCats();
+  fillUnits();
+  compute();
+</script>

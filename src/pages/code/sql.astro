@@ -1,0 +1,55 @@
+---
+import Converter from '../../layouts/Converter.astro';
+import { SQL_DIALECTS } from '../../lib/code/sqlFormat';
+---
+
+<Converter
+  title="SQL 格式化 · sw-tools"
+  description="SQL 格式化 / 美化：多方言支持、关键字大写、统一缩进，纯浏览器本地处理。"
+  toolName="SQL 格式化"
+  inputPlaceholder="在此粘贴待格式化的 SQL…（失去焦点后自动格式化）"
+  outputLabel="格式化结果"
+  downloadName="sql-formatted"
+  downloadExt="sql"
+  categoryHref="/#code"
+  categoryName="代码工具"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方言
+    <select
+      id="dialect"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      {SQL_DIALECTS.map((d) => <option value={d.id}>{d.name}</option>)}
+    </select>
+  </label>
+  <label slot="input-tools" class="ml-2 flex items-center gap-1 text-xs text-slate-500">
+    缩进
+    <select
+      id="indent"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="  ">2 空格</option>
+      <option value="    ">4 空格</option>
+      <option value="&#9;">Tab</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { formatSql } from '../../lib/code/sqlFormat';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = `select u.id,u.name,count(o.id) as order_count from users u left join orders o on o.user_id=u.id where u.status='active' and u.created_at>'2024-01-01' group by u.id,u.name having count(o.id)>5 order by order_count desc limit 20;`;
+
+  setupConverter({
+    downloadName: 'sql-formatted',
+    downloadExt: 'sql',
+    sample: SAMPLE,
+    convert: (sql) => {
+      const dialect = (document.getElementById('dialect') as HTMLSelectElement).value;
+      const indentSel = (document.getElementById('indent') as HTMLSelectElement).value;
+      return formatSql(sql, { dialect: dialect as never, indent: indentSel });
+    },
+  });
+</script>

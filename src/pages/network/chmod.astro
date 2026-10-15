@@ -1,0 +1,290 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+---
+
+<Tool
+  title="Chmod 权限计算器 · sw-tools"
+  toolName="Chmod 权限计算器"
+  description="八进制与 rwx 符号互转，支持 setuid / setgid / sticky 特殊位与 chmod 符号子句（u+x、go-w、a=rx），附 ls -l 风格输出与中文权限描述。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="权限编辑"
+  outputLabel="转换结果"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 八进制 / 符号输入 -->
+    <div class="space-y-2">
+      <div>
+        <label class="calc-label" for="in-octal">八进制（3~4 位）</label>
+        <input id="in-octal" type="text" spellcheck="false" class="calc-input font-mono text-sm" value="0755" placeholder="755 / 4755" />
+      </div>
+      <div>
+        <label class="calc-label" for="in-sym">rwx 符号串</label>
+        <input id="in-sym" type="text" spellcheck="false" class="calc-input font-mono text-sm" value="rwxr-xr-x" placeholder="rwxr-xr-x" />
+      </div>
+    </div>
+
+    <!-- 勾选矩阵 -->
+    <div>
+      <span class="calc-label">权限矩阵</span>
+      <table class="w-full border-collapse text-xs">
+        <thead>
+          <tr class="text-slate-400">
+            <th class="w-10 font-medium"></th>
+            <th class="py-1 font-medium">读 r</th>
+            <th class="py-1 font-medium">写 w</th>
+            <th class="py-1 font-medium">执行 x</th>
+          </tr>
+        </thead>
+        <tbody class="text-center">
+          <tr>
+            <td class="py-1 text-left font-semibold text-slate-600 dark:text-slate-300">属主 u</td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-user-r" /></td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-user-w" /></td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-user-x" /></td>
+          </tr>
+          <tr>
+            <td class="py-1 text-left font-semibold text-slate-600 dark:text-slate-300">同组 g</td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-group-r" /></td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-group-w" /></td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-group-x" /></td>
+          </tr>
+          <tr>
+            <td class="py-1 text-left font-semibold text-slate-600 dark:text-slate-300">其他 o</td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-other-r" /></td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-other-w" /></td>
+            <td><input type="checkbox" class="accent-brand-600" id="cb-other-x" /></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="mt-2 space-y-1">
+        <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <input type="checkbox" class="accent-brand-600" id="cb-setuid" />
+          <span>setuid（4000）以属主身份运行</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <input type="checkbox" class="accent-brand-600" id="cb-setgid" />
+          <span>setgid（2000）继承属组</span>
+        </label>
+        <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+          <input type="checkbox" class="accent-brand-600" id="cb-sticky" />
+          <span>sticky（1000）公共目录防删</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- 符号子句 -->
+    <div>
+      <span class="calc-label">符号子句（在当前模式上应用）</span>
+      <div class="flex gap-2">
+        <input id="in-clause" type="text" spellcheck="false" class="calc-input flex-1 font-mono text-sm" placeholder="u+x / go-w / a=rx" />
+        <button class="tool-btn tool-btn-sm" id="btn-clause" title="应用子句"><Icon name="check" /><span>应用</span></button>
+      </div>
+      <p class="mt-1 text-xs text-slate-400" id="clause-status"></p>
+    </div>
+
+    <!-- 常用预设 -->
+    <div>
+      <span class="calc-label">常用预设</span>
+      <div class="flex flex-wrap gap-1.5" id="preset-row"></div>
+    </div>
+  </div>
+
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="mode-status"></span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy" title="复制权限报告"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 当前模式 -->
+    <div class="result-card">
+      <div class="flex items-baseline justify-between">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">当前模式</span>
+        <span class="font-mono text-2xl font-bold text-brand-600 dark:text-brand-400" id="out-octal">0755</span>
+      </div>
+      <div class="kv">
+        <span class="k">rwx 符号</span>
+        <span class="v font-mono" id="out-sym">rwxr-xr-x</span>
+      </div>
+      <div class="kv">
+        <span class="k">ls -l 样式</span>
+        <span class="v font-mono" id="out-ls">-rwxr-xr-x file</span>
+      </div>
+    </div>
+
+    <!-- 权限描述 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">权限描述</span>
+      <p class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400" id="out-desc"></p>
+    </div>
+
+    <!-- 命令预览 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">chmod 命令</span>
+      <div class="mt-1 space-y-1">
+        <p class="font-mono text-xs text-slate-500 dark:text-slate-400" id="cmd-octal">chmod 755 file</p>
+        <p class="font-mono text-xs text-slate-500 dark:text-slate-400" id="cmd-sym">chmod u=rwx,go=rx file</p>
+      </div>
+    </div>
+
+    <details class="rounded-xl border border-slate-200 p-3 text-xs leading-relaxed text-slate-500 dark:border-slate-700 dark:text-slate-400">
+      <summary class="cursor-pointer font-semibold text-slate-600 dark:text-slate-300">特殊位与规则说明</summary>
+      <ul class="mt-2 space-y-1">
+        <li>· <b>setuid（s/S）</b>：属主执行位显示 s；无执行权限时显示 S。可执行文件以此文件属主身份运行。</li>
+        <li>· <b>setgid（s/S）</b>：同组执行位显示 s/S。目录上新创建的文件继承该目录属组。</li>
+        <li>· <b>sticky（t/T）</b>：其他用户执行位显示 t/T。公共目录（如 /tmp）中仅文件属主可删除自己的文件。</li>
+        <li>· 符号子句：who 省略或写 a 表示三类用户；<code>=</code> 先清空对应 rwx 再设置；<code>X</code> 仅在已存在执行位时生效。</li>
+        <li>· 八进制每位 = 4(r) + 2(w) + 1(x)，首位 4/2/1 分别对应 setuid / setgid / sticky。</li>
+        <li>· 全程本地计算，不发送任何数据。</li>
+      </ul>
+    </details>
+  </div>
+</Tool>
+
+<script>
+  import {
+    parseOctal,
+    bitsToOctal,
+    bitsToSymbolic,
+    symbolicToOctal,
+    applyClause,
+    lsLine,
+    describeMode,
+    commonPresets,
+    type PermBits,
+    type Who,
+  } from '../../lib/network/chmod';
+
+  const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+  const input = (id: string): HTMLInputElement => document.getElementById(id) as HTMLInputElement;
+
+  let bits: PermBits = parseOctal('755')!;
+
+  const WHOS: Who[] = ['user', 'group', 'other'];
+  const PERMS = ['r', 'w', 'x'] as const;
+
+  function render(fromInput = ''): void {
+    const octal = bitsToOctal(bits);
+    const sym = bitsToSymbolic(bits);
+    if (fromInput !== 'in-octal') input('in-octal').value = octal;
+    if (fromInput !== 'in-sym') input('in-sym').value = sym;
+
+    for (const w of WHOS) {
+      for (const p of PERMS) {
+        input(`cb-${w}-${p}`).checked = bits[w][p];
+      }
+    }
+    input('cb-setuid').checked = bits.setuid;
+    input('cb-setgid').checked = bits.setgid;
+    input('cb-sticky').checked = bits.sticky;
+
+    $('out-octal').textContent = octal;
+    $('out-sym').textContent = sym;
+    $('out-ls').textContent = lsLine(bits, 'file');
+    $('out-desc').textContent = describeMode(bits);
+    $('cmd-octal').textContent = `chmod ${octal.slice(octal.length - 3)} file`;
+    $('cmd-sym').textContent = `chmod ${sym} file`;
+    $('mode-status').textContent = `${octal} · ${sym}`;
+  }
+
+  // 八进制输入
+  input('in-octal').addEventListener('input', () => {
+    const v = input('in-octal').value.trim();
+    const parsed = parseOctal(v);
+    input('in-octal').classList.toggle('border-rose-400', !parsed && v.length > 0);
+    if (parsed) {
+      bits = parsed;
+      render('in-octal');
+    }
+  });
+
+  // 符号串输入
+  input('in-sym').addEventListener('input', () => {
+    const v = input('in-sym').value.trim();
+    const octal = symbolicToOctal(v);
+    input('in-sym').classList.toggle('border-rose-400', !octal && v.length > 0);
+    if (octal) {
+      bits = parseOctal(octal)!;
+      render('in-sym');
+    }
+  });
+
+  // 矩阵与特殊位
+  for (const w of WHOS) {
+    for (const p of PERMS) {
+      input(`cb-${w}-${p}`).addEventListener('change', () => {
+        bits[w][p] = input(`cb-${w}-${p}`).checked;
+        render();
+      });
+    }
+  }
+  input('cb-setuid').addEventListener('change', () => {
+    bits.setuid = input('cb-setuid').checked;
+    render();
+  });
+  input('cb-setgid').addEventListener('change', () => {
+    bits.setgid = input('cb-setgid').checked;
+    render();
+  });
+  input('cb-sticky').addEventListener('change', () => {
+    bits.sticky = input('cb-sticky').checked;
+    render();
+  });
+
+  // 符号子句
+  $('btn-clause').addEventListener('click', () => {
+    const clause = input('in-clause').value.trim();
+    const before = bitsToOctal(bits);
+    const after = applyClause(before, clause);
+    const status = $('clause-status');
+    if (!after) {
+      status.textContent = `「${clause}」不是合法的符号子句`;
+      status.className = 'mt-1 text-xs text-rose-500';
+      return;
+    }
+    bits = parseOctal(after)!;
+    render();
+    status.textContent = `已应用：${before} → ${after}`;
+    status.className = 'mt-1 text-xs text-emerald-600 dark:text-emerald-400';
+  });
+
+  // 预设
+  const presetRow = $('preset-row');
+  for (const p of commonPresets()) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-chip';
+    btn.textContent = p.label;
+    btn.title = `${p.desc}（${p.octal}）`;
+    btn.dataset.octal = p.octal;
+    btn.addEventListener('click', () => {
+      const parsed = parseOctal(btn.dataset.octal!);
+      if (parsed) {
+        bits = parsed;
+        render();
+      }
+    });
+    presetRow.appendChild(btn);
+  }
+
+  // 复制
+  $('btn-copy').addEventListener('click', async () => {
+    const octal = bitsToOctal(bits);
+    const report = [
+      `八进制：${octal}`,
+      `符号串：${bitsToSymbolic(bits)}`,
+      `ls -l：${lsLine(bits, 'file')}`,
+      `描述：${describeMode(bits)}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(report);
+      $('mode-status').textContent = '已复制权限报告';
+      window.setTimeout(() => render(), 1200);
+    } catch {
+      /* 剪贴板不可用时忽略 */
+    }
+  });
+
+  render();
+</script>

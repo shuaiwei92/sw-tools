@@ -1,0 +1,83 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="JWT 解析 · sw-tools"
+  description="解析 JWT header / payload，提取时间声明，支持 HS256/384/512 密钥签名校验，纯本地处理。"
+  toolName="JWT 解析"
+  inputPlaceholder="在此粘贴 JWT（header.payload.signature）…（失去焦点后解析）"
+  outputLabel="解析结果"
+  downloadName="jwt-decoded"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    密钥（选填）
+    <input
+      id="secret"
+      type="text"
+      spellcheck="false"
+      placeholder="填入后可验签"
+      class="w-40 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+    />
+  </label>
+</Converter>
+
+<script>
+  import { decodeJwt, verifyJwt, jwtTimeInfo } from '../../lib/crypto/jwt';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6Iua1i-ivleiIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjo0MTAyNDQ0ODAwfQ.5m0NSKmmZL4hDoUp0NfCs2YhGE6Wf5Avvhfw1czGMBI';
+
+  const secretEl = () => document.getElementById('secret') as HTMLInputElement;
+
+  const fmtTime = (d: Date) =>
+    d.toLocaleString('zh-CN', { hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+  setupConverter({
+    downloadName: 'jwt-decoded',
+    downloadExt: 'txt',
+    convert: async (input) => {
+      const { header, payload, headerJson, payloadJson, signature } = decodeJwt(input);
+      const lines: string[] = [];
+      lines.push('════ Header ════');
+      lines.push(JSON.stringify(header, null, 2));
+      lines.push('');
+      lines.push('════ Payload ════');
+      lines.push(JSON.stringify(payload, null, 2));
+      const times = jwtTimeInfo(payload);
+      if (times.length) {
+        lines.push('');
+        lines.push('════ 时间声明 ════');
+        for (const t of times) {
+          lines.push(`${t.label}: ${t.date ? fmtTime(t.date) : '—'}${t.note ? `（${t.note}）` : ''}`);
+        }
+      }
+      lines.push('');
+      lines.push('════ Signature ════');
+      lines.push(signature || '（无签名段）');
+      const secret = secretEl().value;
+      if (secret) {
+        const v = await verifyJwt(input, secret);
+        lines.push('');
+        lines.push('════ 签名校验 ════');
+        lines.push(
+          v.supported
+            ? `${v.valid ? '✓' : '✗'} ${v.alg} 签名${v.valid ? '有效' : `无效（${v.reason}）`}`
+            : `— ${v.reason}`
+        );
+      }
+      void headerJson;
+      void payloadJson;
+      return lines.join('\n');
+    },
+    sample: SAMPLE,
+  });
+
+  secretEl().addEventListener('input', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>

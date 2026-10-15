@@ -1,0 +1,171 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="分数计算器 · sw-tools"
+  toolName="分数计算器"
+  description="分数四则运算与自动化简、小数互转，纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="分数运算"
+  outputLabel="结果"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-5 p-3">
+    <div class="flex flex-wrap items-end gap-3">
+      <div class="flex items-center gap-1">
+        <div>
+          <label class="calc-label" for="fr-an">A 分子</label>
+          <input id="fr-an" type="number" class="calc-input w-20 text-center" value="1" />
+        </div>
+        <div class="pb-2 text-slate-400">/</div>
+        <div>
+          <label class="calc-label" for="fr-ad">A 分母</label>
+          <input id="fr-ad" type="number" class="calc-input w-20 text-center" value="2" />
+        </div>
+      </div>
+      <select id="fr-op" class="calc-input w-16 text-center font-bold">
+        <option value="add">+</option>
+        <option value="sub">−</option>
+        <option value="mul">×</option>
+        <option value="div">÷</option>
+      </select>
+      <div class="flex items-center gap-1">
+        <div>
+          <label class="calc-label" for="fr-bn">B 分子</label>
+          <input id="fr-bn" type="number" class="calc-input w-20 text-center" value="1" />
+        </div>
+        <div class="pb-2 text-slate-400">/</div>
+        <div>
+          <label class="calc-label" for="fr-bd">B 分母</label>
+          <input id="fr-bd" type="number" class="calc-input w-20 text-center" value="3" />
+        </div>
+      </div>
+    </div>
+
+    <div class="result-card">
+      <div class="text-xs text-slate-500 dark:text-slate-400">结果（最简分数）</div>
+      <div id="fr-out" class="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-300">—</div>
+      <div id="fr-dec" class="mt-1 text-sm text-slate-500 dark:text-slate-400"></div>
+    </div>
+
+    <p class="text-xs leading-relaxed text-slate-400">结果自动约分为最简分数；分母为 0 时会提示错误。</p>
+  </div>
+
+  <button slot="output-tools" id="fr-copy" class="tool-btn tool-btn-sm" title="复制结果">复制结果</button>
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-4 p-3">
+    <div class="result-card flex min-h-0 flex-1 flex-col gap-4">
+      <!-- 输入 -->
+      <div class="shrink-0">
+        <label class="calc-label" for="fr-d2f">小数转分数</label>
+        <input id="fr-d2f" class="calc-input text-center font-mono text-lg" placeholder="输入小数，如 0.75" value="0.75" />
+      </div>
+
+      <!-- 大号分数展示：分子 / 分数线 / 分母 -->
+      <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-2">
+        <div id="fr-d2f-vis" class="flex items-center justify-center gap-3 text-slate-700 dark:text-slate-200"></div>
+        <div id="fr-d2f-dec" class="text-sm text-slate-500 dark:text-slate-400"></div>
+      </div>
+
+      <!-- 常用小数快捷填充 -->
+      <div class="shrink-0 border-t border-brand-200/60 pt-3 dark:border-slate-700">
+        <p class="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">常用小数（点击填入）</p>
+        <div id="fr-quick" class="flex flex-wrap gap-1.5"></div>
+      </div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { frac, fadd, fsub, fmul, fdiv, toDecimal, fromDecimal, display, type Frac } from '../../lib/calc/fraction';
+
+  const an = document.getElementById('fr-an') as HTMLInputElement;
+  const ad = document.getElementById('fr-ad') as HTMLInputElement;
+  const bn = document.getElementById('fr-bn') as HTMLInputElement;
+  const bd = document.getElementById('fr-bd') as HTMLInputElement;
+  const op = document.getElementById('fr-op') as HTMLSelectElement;
+  const out = document.getElementById('fr-out') as HTMLDivElement;
+  const dec = document.getElementById('fr-dec') as HTMLDivElement;
+  const d2f = document.getElementById('fr-d2f') as HTMLInputElement;
+  const d2fVis = document.getElementById('fr-d2f-vis') as HTMLDivElement;
+  const d2fDec = document.getElementById('fr-d2f-dec') as HTMLDivElement;
+
+  function compute() {
+    try {
+      const a = frac(parseFloat(an.value) || 0, parseFloat(ad.value) || 1);
+      const b = frac(parseFloat(bn.value) || 0, parseFloat(bd.value) || 1);
+      let r: Frac;
+      if (op.value === 'add') r = fadd(a, b);
+      else if (op.value === 'sub') r = fsub(a, b);
+      else if (op.value === 'mul') r = fmul(a, b);
+      else r = fdiv(a, b);
+      out.textContent = display(r);
+      dec.textContent = `= ${toDecimal(r)}`;
+    } catch (e) {
+      out.textContent = '错误';
+      dec.textContent = (e as Error).message;
+    }
+  }
+
+  /** 大号竖式分数：分子在上、分母在下，整数则直接展示 */
+  function renderFracVis(f: Frac) {
+    const numCls = 'text-4xl font-bold leading-none text-brand-600 dark:text-brand-300';
+    if (f.d === 1) {
+      d2fVis.innerHTML = `<span class="${numCls}">${f.n}</span>`;
+      return;
+    }
+    const minus = f.n < 0 ? '<span class="text-3xl font-bold text-slate-400">−</span>' : '';
+    d2fVis.innerHTML = `${minus}<div class="flex flex-col items-center">
+      <span class="${numCls}">${Math.abs(f.n)}</span>
+      <span class="my-1.5 h-0.5 w-16 rounded bg-slate-300 dark:bg-slate-600"></span>
+      <span class="${numCls}">${f.d}</span>
+    </div>`;
+  }
+
+  function d2fCompute() {
+    const s = d2f.value.trim();
+    if (!s) {
+      d2fVis.innerHTML = '<span class="text-2xl font-bold text-slate-300 dark:text-slate-600">—</span>';
+      d2fDec.textContent = '';
+      return;
+    }
+    const x = parseFloat(s);
+    if (Number.isNaN(x)) {
+      d2fVis.innerHTML = '<span class="text-2xl font-bold text-rose-500">✗ 无效小数</span>';
+      d2fDec.textContent = '';
+      return;
+    }
+    try {
+      const f = fromDecimal(x);
+      renderFracVis(f);
+      d2fDec.textContent = `= ${x}（已约分为最简分数）`;
+    } catch (e) {
+      d2fVis.innerHTML = '<span class="text-2xl font-bold text-rose-500">✗ ' + (e as Error).message + '</span>';
+      d2fDec.textContent = '';
+    }
+  }
+
+  // 常用小数快捷 chips
+  const QUICK = ['0.5', '0.25', '0.75', '0.125', '0.2', '0.1', '0.05', '0.333', '0.875', '1.5', '2.5'];
+  const quickEl = document.getElementById('fr-quick') as HTMLDivElement;
+  quickEl.innerHTML = QUICK.map(
+    (v) => `<button class="tool-btn tool-btn-sm font-mono" data-q="${v}" title="填入 ${v}">${v}</button>`
+  ).join('');
+  quickEl.querySelectorAll<HTMLButtonElement>('[data-q]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      d2f.value = btn.dataset.q!;
+      d2fCompute();
+    });
+  });
+
+  [an, ad, bn, bd, op].forEach((el) => el.addEventListener('input', compute));
+  [an, ad, bn, bd, op].forEach((el) => el.addEventListener('change', compute));
+  d2f.addEventListener('input', d2fCompute);
+  document.getElementById('fr-copy')?.addEventListener('click', async () => {
+    const t = out.textContent ?? '';
+    if (!t || t === '—') return;
+    await navigator.clipboard.writeText(t);
+  });
+  compute();
+  d2fCompute();
+</script>

@@ -1,10 +1,73 @@
 ---
 import Icon from './Icon.astro';
 import { SITE } from '../consts';
-import { toolsByCategory } from '../lib/tools';
+import { toolsByCategory, GROUP_META, type ToolMeta } from '../lib/tools';
 
 const groups = toolsByCategory();
 const currentPath = Astro.url.pathname;
+
+/** 单列最大工具数：超出自动另起一列，避免单列下拉过长。 */
+const MAX_PER_COL = 10;
+
+/** Header 一级直接展示的最大分类数：超出部分收进「更多 ▾」，任何视口宽度不溢出。 */
+const MAX_TOP_CATS = 8;
+
+/** 按 group 切子分组；无 group 的分类退化为单个无标题段。 */
+function splitByGroup(items: ToolMeta[]): { title: string; items: ToolMeta[] }[] {
+  if (!items.some((t) => t.group)) return [{ title: '', items }];
+  const order: string[] = [];
+  const map = new Map<string, ToolMeta[]>();
+  for (const t of items) {
+    const k = t.group ?? '';
+    if (!map.has(k)) {
+      map.set(k, []);
+      order.push(k);
+    }
+    map.get(k)!.push(t);
+  }
+  return order.map((k) => ({ title: GROUP_META[k] ?? '', items: map.get(k)! }));
+}
+
+/** 把若干分类各自切成 { 分类标题, 列[] }，供「更多」聚合面板使用。 */
+function splitByCategory(cats: { meta: { name: string }; items: ToolMeta[] }[]): { title: string; cols: ToolMeta[][] }[] {
+  return cats.map((c) => {
+    const cols: ToolMeta[][] = [];
+    for (let i = 0; i < c.items.length; i += MAX_PER_COL) {
+      cols.push(c.items.slice(i, i + MAX_PER_COL));
+    }
+    return { title: c.meta.name, cols };
+  });
+}
+
+/** 把段列表按 MAX_PER_COL 切列。 */
+function toCols(items: ToolMeta[]): ToolMeta[][] {
+  const cols: ToolMeta[][] = [];
+  for (let i = 0; i < items.length; i += MAX_PER_COL) {
+    cols.push(items.slice(i, i + MAX_PER_COL));
+  }
+  return cols;
+}
+
+const topGroups = groups.slice(0, MAX_TOP_CATS);
+const moreGroups = groups.slice(MAX_TOP_CATS);
+
+// 面板几何常量（需与模板中的 class 保持一致）：列宽 / 列间距 / 分组间距 / 面板内边距
+const COL_W = 256;
+const COL_GAP = 8;
+const SEC_GAP = 20;
+const PANEL_PAD = 16;
+
+/** 按列数与分组数显式计算面板宽度（px）：悬停描述时宽度恒定，不随文字长短变化。 */
+function panelWidth(sections: { cols: ToolMeta[][] }[]): number {
+  const totalCols = sections.reduce((n, s) => n + s.cols.length, 0);
+  const secCount = sections.length;
+  return totalCols * COL_W + Math.max(totalCols - secCount, 0) * COL_GAP + Math.max(secCount - 1, 0) * SEC_GAP + PANEL_PAD;
+}
+
+/** 把一个分类的工具按 group 切成有序子分组（无 group 的归入无标题段），每段再按 MAX_PER_COL 切列。 */
+function splitSections(items: ToolMeta[]): { title: string; cols: ToolMeta[][] }[] {
+  return splitByGroup(items).map((sec) => ({ title: sec.title, cols: toCols(sec.items) }));
+}
 ---
 <header
   id="site-header"
@@ -19,8 +82,8 @@ const currentPath = Astro.url.pathname;
     <!-- 桌面端：按分类生成导航，点开仅展开该组工具 -->
     <nav class="hidden items-center gap-0.5 lg:flex" id="cat-nav" aria-label="工具分类">
       {
-        groups.map((g) => {
-          const twoCol = g.items.length > 4;
+        topGroups.map((g) => {
+          const sections = splitSections(g.items);
           return (
           <div class="relative" data-cat-wrap={g.category}>
             <button
@@ -34,51 +97,143 @@ const currentPath = Astro.url.pathname;
             </button>
             <div
               id={`panel-${g.category}`}
-              class:list={[
-                'cat-panel absolute left-0 top-full z-20 mt-2 hidden rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900',
-                twoCol ? 'w-[40rem] max-w-[calc(100vw-2rem)]' : 'w-64',
-              ]}
+              class="cat-panel absolute left-0 top-full z-20 mt-2 hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+              style={`width: min(${panelWidth(sections)}px, calc(100vw - 2rem))`}
               role="menu"
             >
-              <div class="mb-1 flex items-center gap-1.5 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                <Icon name={g.meta.icon} size={13} />
-                {g.meta.name}
-                <span class="ml-auto text-[10px] font-normal normal-case text-slate-300 dark:text-slate-600">{g.items.length}</span>
+              <div class="flex gap-5">
+                {sections.map((sec) => (
+                  <div class="flex flex-col gap-0.5">
+                    {sec.title && (
+                      <div class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        {sec.title}
+                      </div>
+                    )}
+                    <div class="flex gap-2">
+                      {sec.cols.map((col) => (
+                        <div class="flex w-64 flex-col gap-0.5">
+                          {col.map((t) =>
+                        t.status === 'ready' ? (
+                          <a
+                            href={t.path}
+                            role="menuitem"
+                            data-name={t.name}
+                            data-desc={t.description}
+                            class:list={[
+                              'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition',
+                              currentPath === t.path
+                                ? 'bg-brand-50 font-medium text-brand-600 dark:bg-brand-950 dark:text-brand-300'
+                                : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                            ]}
+                          >
+                            <Icon name={t.icon} size={16} class="shrink-0 text-slate-400" />
+                            <span class="min-w-0 truncate">{t.name}</span>
+                          </a>
+                        ) : (
+                          <span
+                            class="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-400 opacity-60 dark:text-slate-600"
+                            data-name={t.name}
+                            data-desc="即将上线"
+                          >
+                            <Icon name={t.icon} size={16} class="shrink-0" />
+                            <span class="truncate">{t.name}</span>
+                          </span>
+                        )
+                      )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div class:list={['gap-0.5', twoCol ? 'grid grid-cols-2' : 'flex flex-col']}>
-                {g.items.map((t) =>
-                  t.status === 'ready' ? (
-                    <a
-                      href={t.path}
-                      role="menuitem"
-                      class:list={[
-                        'flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition',
-                        currentPath === t.path
-                          ? 'bg-brand-50 font-medium text-brand-600 dark:bg-brand-950 dark:text-brand-300'
-                          : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-                      ]}
-                    >
-                      <Icon name={t.icon} size={16} class="mt-0.5 shrink-0 text-slate-400" />
-                      <span class="min-w-0">
-                        <span class="block truncate">{t.name}</span>
-                        <span class="block truncate text-xs text-slate-400">{t.description}</span>
-                      </span>
-                    </a>
-                  ) : (
-                    <span class="flex cursor-not-allowed items-start gap-2 rounded-md px-2 py-1.5 text-sm text-slate-400 opacity-60 dark:text-slate-600" title="即将上线">
-                      <Icon name={t.icon} size={16} class="mt-0.5 shrink-0" />
-                      <span class="min-w-0">
-                        <span class="block truncate">{t.name}</span>
-                        <span class="block truncate text-xs">即将上线</span>
-                      </span>
-                    </span>
-                  )
-                )}
+              {/* 底部详情条：悬停工具时显示描述，网格高度恒定、不遮挡任何选项 */}
+              <div
+                id={`detail-${g.category}`}
+                class="cat-detail flex min-h-11 items-start border-t border-slate-100 px-2 pt-1.5 text-xs leading-relaxed text-slate-400 dark:border-slate-800 dark:text-slate-500"
+              >
+                将鼠标移至工具查看描述
               </div>
             </div>
           </div>
           );
         })
+      }
+      {
+        moreGroups.length > 0 && (() => {
+          const moreSections = splitByCategory(moreGroups);
+          return (
+            <div class="relative" data-cat-wrap="more">
+              <button
+                class="cat-btn flex items-center gap-1 rounded-lg px-2.5 py-1 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-800 dark:hover:text-white"
+                data-cat="more"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                更多
+                <svg class="h-3 w-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              <div
+                id="panel-more"
+                class="cat-panel absolute right-0 top-full z-20 mt-2 hidden flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                style={`width: min(${panelWidth(moreSections)}px, calc(100vw - 2rem))`}
+                role="menu"
+              >
+                <div class="flex gap-5">
+                  {moreSections.map((sec) => (
+                    <div class="flex flex-col gap-0.5">
+                      {sec.title && (
+                        <div class="px-2 py-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                          {sec.title}
+                        </div>
+                      )}
+                      <div class="flex gap-2">
+                        {sec.cols.map((col) => (
+                          <div class="flex w-64 flex-col gap-0.5">
+                            {col.map((t) =>
+                              t.status === 'ready' ? (
+                                <a
+                                  href={t.path}
+                                  role="menuitem"
+                                  data-name={t.name}
+                                  data-desc={t.description}
+                                  class:list={[
+                                    'flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition',
+                                    currentPath === t.path
+                                      ? 'bg-brand-50 font-medium text-brand-600 dark:bg-brand-950 dark:text-brand-300'
+                                      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+                                  ]}
+                                >
+                                  <Icon name={t.icon} size={16} class="shrink-0 text-slate-400" />
+                                  <span class="min-w-0 truncate">{t.name}</span>
+                                </a>
+                              ) : (
+                                <span
+                                  class="flex cursor-not-allowed items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-400 opacity-60 dark:text-slate-600"
+                                  data-name={t.name}
+                                  data-desc="即将上线"
+                                >
+                                  <Icon name={t.icon} size={16} class="shrink-0" />
+                                  <span class="truncate">{t.name}</span>
+                                </span>
+                              )
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* 底部详情条：与各分类面板一致 */}
+                <div
+                  id="detail-more"
+                  class="cat-detail flex min-h-11 items-start border-t border-slate-100 px-2 pt-1.5 text-xs leading-relaxed text-slate-400 dark:border-slate-800 dark:text-slate-500"
+                >
+                  将鼠标移至工具查看描述
+                </div>
+              </div>
+            </div>
+          );
+        })()
       }
     </nav>
 
@@ -117,8 +272,7 @@ const currentPath = Astro.url.pathname;
             {
               groups.map((g) => (
                 <div class="tools-group px-1 py-1.5" data-group>
-                  <div class="mb-1 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                    <Icon name={g.meta.icon} size={13} />
+                  <div class="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     {g.meta.name}
                   </div>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-0.5">
@@ -190,8 +344,7 @@ const currentPath = Astro.url.pathname;
       {
         groups.map((g) => (
           <div>
-            <div class="mb-1 flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-              <Icon name={g.meta.icon} size={13} />
+            <div class="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
               {g.meta.name}
             </div>
             <div class="flex flex-col gap-0.5">
@@ -256,6 +409,15 @@ const currentPath = Astro.url.pathname;
   const results = document.getElementById('tools-results');
   const mobileToggle = document.getElementById('mobile-toggle') as HTMLButtonElement | null;
   const mobilePanel = document.getElementById('mobile-panel');
+
+  // 主题切换：点击切换 <html> 的 dark 类并持久化（Base 的首屏脚本负责加载时应用，避免闪烁）
+  const themeToggle = document.getElementById('theme-toggle');
+  themeToggle?.addEventListener('click', () => {
+    const isDark = document.documentElement.classList.toggle('dark');
+    try {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    } catch (e) {}
+  });
 
   let activeIdx = -1;
 
@@ -327,6 +489,32 @@ const currentPath = Astro.url.pathname;
         btn.setAttribute('aria-expanded', 'true');
         btn.classList.add('cat-open');
       }
+    });
+  });
+
+  // 分类面板底部详情条：悬停任一工具时显示其描述（网格不位移、不遮挡选项）
+  document.querySelectorAll('.cat-panel').forEach((panel) => {
+    const detail = panel.querySelector('.cat-detail');
+    if (!detail) return;
+    const defaultText = detail.textContent ?? '';
+    panel.addEventListener('mouseover', (e) => {
+      const el = (e.target as HTMLElement).closest('[data-desc]');
+      if (!(el instanceof HTMLElement)) {
+        detail.textContent = defaultText;
+        return;
+      }
+      const name = el.dataset.name ?? '';
+      const desc = el.dataset.desc ?? '';
+      const box = document.createElement('span');
+      box.className = 'line-clamp-3';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'font-medium text-slate-600 dark:text-slate-300';
+      nameSpan.textContent = name;
+      box.append(nameSpan, document.createTextNode('　' + desc));
+      detail.replaceChildren(box);
+    });
+    panel.addEventListener('mouseleave', () => {
+      detail.textContent = defaultText;
     });
   });
 

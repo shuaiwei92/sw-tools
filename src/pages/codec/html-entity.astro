@@ -1,0 +1,73 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="HTML 实体编解码 · sw-tools"
+  description="命名实体 / 十进制 / 十六进制实体互转，内置约 180 个常用命名实体，纯浏览器本地处理。"
+  toolName="HTML 实体编解码"
+  inputPlaceholder="在此粘贴 HTML 或文本…（自动识别方向，失去焦点后转换）"
+  outputLabel="输出"
+  downloadName="html-entity-result"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="encode">文本 → 实体</option>
+      <option value="decode">实体 → 文本</option>
+    </select>
+  </label>
+  <label slot="input-tools" class="ml-2 flex items-center gap-1 text-xs text-slate-500">
+    编码方式
+    <select
+      id="mode"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="named">命名实体（&copy;）</option>
+      <option value="numeric">数字实体（&#169;）</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import {
+    encodeHtmlEntities,
+    decodeHtmlEntities,
+    type EntityMode,
+  } from '../../lib/codec/htmlEntity';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = '<div class="tip">价格 &copy; 2024 · 5 &lt; 6 &amp; 7 &gt; 3</div>';
+
+  const dirEl = () => document.getElementById('direction') as HTMLSelectElement;
+  const modeEl = () => document.getElementById('mode') as HTMLSelectElement;
+
+  // 含实体序列视为待解码
+  const looksEntity = (text: string) => /&(#x?[0-9A-Fa-f]+|[A-Za-z][A-Za-z0-9]*);/.test(text);
+
+  setupConverter({
+    downloadName: 'html-entity-result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const dir = dirEl().value === 'auto' ? (looksEntity(input) ? 'decode' : 'encode') : dirEl().value;
+      return dir === 'decode'
+        ? decodeHtmlEntities(input)
+        : encodeHtmlEntities(input, modeEl().value as EntityMode);
+    },
+    getDirection: () => dirEl().value,
+    detectDirection: (input) => (looksEntity(input) ? 'decode' : 'encode'),
+    directionLabels: { encode: '文本 → HTML 实体', decode: 'HTML 实体 → 文本' },
+    sample: SAMPLE,
+  });
+
+  modeEl().addEventListener('change', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>

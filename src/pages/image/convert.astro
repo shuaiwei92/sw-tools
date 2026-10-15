@@ -1,160 +1,214 @@
 ---
-import Base from '../../layouts/Base.astro';
+import Tool from '../../layouts/Tool.astro';
 import Icon from '../../components/Icon.astro';
-
-const CATEGORY = { href: '/#image', name: '图片处理' };
-const TOOL = '图片格式转换';
 ---
 
-<Base title={`${TOOL} · sw-tools`} description="PNG / JPEG / WebP 互转，支持质量调节与透明填充，全部在本地浏览器完成。">
-  <div class="mx-auto flex w-full max-w-5xl flex-col gap-4">
-    <!-- 页头 / 面包屑 -->
-    <div>
-      <h1 class="text-xl font-bold">{TOOL}</h1>
-      <nav class="mt-1 flex items-center gap-1.5 text-xs" aria-label="面包屑">
-        <a href="/" class="cursor-pointer text-brand-600 transition hover:text-brand-700 hover:underline underline-offset-2" title="返回首页">首页</a>
-        <span class="text-slate-300 dark:text-slate-600">/</span>
-        <a href={CATEGORY.href} class="cursor-pointer text-slate-400 transition hover:text-brand-600 hover:underline underline-offset-2 dark:text-slate-500" title="查看分类下全部工具">{CATEGORY.name}</a>
-        <span class="text-slate-300 dark:text-slate-600">/</span>
-        <span class="cursor-default font-medium text-slate-700 dark:text-slate-200">{TOOL}</span>
-      </nav>
-      <p class="mt-2 text-sm text-slate-500">
-        上传图片后选择目标格式即可转换。<span class="text-slate-400">提示：</span>GIF 输入仅取首帧；浏览器无法编码 GIF 输出，故导出仅支持 PNG / JPEG / WebP。
-      </p>
+<Tool
+  title="图片转换 / 压缩 · sw-tools"
+  toolName="图片转换 / 压缩"
+  description="本地浏览器完成图片格式互转与压缩：PNG / JPEG / WebP / BMP / ICO / AVIF 互转，按需压缩，不上传服务器。"
+  categoryHref="/#image"
+  categoryName="图片处理"
+  inputLabel="上传与参数"
+  outputLabel="预览与结果"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 模式切换 -->
+    <div class="flex w-fit gap-1 rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+      <button id="mode-convert" type="button" class="mode-btn is-active rounded-md px-4 py-1.5 text-sm font-medium transition" aria-pressed="true">格式转换</button>
+      <button id="mode-compress" type="button" class="mode-btn rounded-md px-4 py-1.5 text-sm font-medium transition" aria-pressed="false">压缩</button>
     </div>
 
     <!-- 拖拽上传 -->
     <label
       id="drop"
-      class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center transition hover:border-brand-500 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-400"
+      class="flex min-h-28 flex-1 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-brand-500 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-400"
     >
-      <Icon name="image" size={28} class="text-slate-400" />
+      <Icon name="image" size={26} class="text-slate-400" />
       <span class="text-sm font-medium text-slate-600 dark:text-slate-300">拖拽图片到此处，或点击选择文件</span>
       <span class="text-xs text-slate-400">支持 PNG / JPEG / WebP / GIF / BMP 等</span>
       <input id="file" type="file" accept="image/*" class="hidden" />
     </label>
 
-    <!-- 控制区：加载后显示 -->
-    <div id="workspace" class="hidden flex-col gap-4">
-      <div class="flex flex-wrap items-end gap-4 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <label class="flex flex-col gap-1 text-sm">
-          <span class="font-medium text-slate-600 dark:text-slate-300">目标格式</span>
-          <select id="fmt" class="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950">
-            <option value="image/png">PNG（无损）</option>
-            <option value="image/jpeg">JPEG</option>
-            <option value="image/webp">WebP</option>
-          </select>
-        </label>
+    <!-- 参数控件 -->
+    <div class="flex flex-col gap-3">
+      <label id="fmt-wrap" class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-slate-600 dark:text-slate-300">目标格式</span>
+        <select id="fmt" class="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950">
+          <!-- 选项由脚本动态生成 -->
+        </select>
+      </label>
 
-        <label id="quality-wrap" class="flex flex-col gap-1 text-sm">
-          <span class="font-medium text-slate-600 dark:text-slate-300">质量：<span id="quality-val">92</span></span>
-          <input id="quality" type="range" min="1" max="100" value="92" class="w-44 accent-brand-600" />
-        </label>
+      <label id="quality-wrap" class="flex flex-col gap-1 text-sm">
+        <span class="font-medium text-slate-600 dark:text-slate-300">质量：<span id="quality-val">90</span></span>
+        <input id="quality" type="range" min="1" max="100" value="90" class="w-full accent-brand-600" />
+      </label>
 
-        <label id="flatten-wrap" class="hidden items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-          <input id="flatten" type="checkbox" checked class="accent-brand-600" />
-          透明区域填充白色（JPEG 无透明通道）
-        </label>
+      <label id="flatten-wrap" class="hidden items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+        <input id="flatten" type="checkbox" checked class="accent-brand-600" />
+        透明区域填充白色（JPEG 无透明通道）
+      </label>
 
-        <button id="download" class="tool-btn ml-auto" title="下载转换后的图片">
-          <Icon name="download" size={16} /><span>下载</span>
-        </button>
-      </div>
-
-      <!-- 预览 + 信息 -->
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-          <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">预览（转换结果）</span>
-          <div class="grid flex-1 place-items-center overflow-hidden rounded-lg border border-slate-100 bg-[repeating-conic-gradient(#e5e7eb_0deg_90deg,#fff_90deg_180deg)] bg-[length:16px_16px] p-2 dark:border-slate-800 dark:bg-[repeating-conic-gradient(#1e293b_0deg_90deg,#0f172a_90deg_180deg)]">
-            <img id="preview" alt="转换预览" class="max-h-[50vh] max-w-full rounded" />
-          </div>
-        </div>
-        <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-          <span class="font-semibold text-slate-600 dark:text-slate-300">信息</span>
-          <div class="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-            <span class="text-slate-500">原始尺寸</span>
-            <span id="info-dims" class="font-mono text-slate-700 dark:text-slate-200">—</span>
-          </div>
-          <div class="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-            <span class="text-slate-500">原始体积</span>
-            <span id="info-orig" class="font-mono text-slate-700 dark:text-slate-200">—</span>
-          </div>
-          <div class="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
-            <span class="text-slate-500">输出体积</span>
-            <span id="info-out" class="font-mono text-slate-700 dark:text-slate-200">—</span>
-          </div>
-          <div class="flex justify-between py-1.5">
-            <span class="text-slate-500">体积变化</span>
-            <span id="info-delta" class="font-mono font-semibold text-slate-700 dark:text-slate-200">—</span>
-          </div>
-        </div>
-      </div>
+      <label id="maxw-wrap" class="hidden flex-col gap-1 text-sm">
+        <span class="font-medium text-slate-600 dark:text-slate-300">最大宽度（像素，留空=不限制）</span>
+        <input id="maxw" type="number" min="1" placeholder="如 1280" class="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" />
+      </label>
     </div>
 
-    <div id="status" class="h-5 text-sm text-slate-500" role="status" aria-live="polite"></div>
+    <p class="text-xs leading-relaxed text-slate-400">
+      GIF 输入仅取首帧；浏览器无法编码 GIF 输出，故导出不提供 GIF。全部在本地浏览器完成，不上传任何服务器。
+    </p>
+    <div id="status" class="text-xs text-slate-500" role="status" aria-live="polite"></div>
   </div>
-</Base>
+
+  <button slot="output-tools" id="download" class="btn-primary tool-btn-sm" title="下载结果图片">
+    <Icon name="download" size={14} /><span>下载</span>
+  </button>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col">
+    <div
+      class="grid min-h-0 flex-1 place-items-center overflow-hidden bg-[repeating-conic-gradient(#e5e7eb_0deg_90deg,#fff_90deg_180deg)] bg-[length:16px_16px] p-3 dark:bg-[repeating-conic-gradient(#1e293b_0deg_90deg,#0f172a_90deg_180deg)]"
+    >
+      <div id="preview-empty" class="text-center text-sm text-slate-400">上传图片后，结果预览将显示在此处</div>
+      <img id="preview" alt="结果预览" class="hidden max-h-full max-w-full rounded" />
+    </div>
+    <div class="grid shrink-0 grid-cols-2 gap-x-6 gap-y-1 border-t border-slate-200 p-3 text-sm dark:border-slate-700">
+      <div class="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
+        <span class="text-slate-500">原始尺寸</span>
+        <span id="info-dims" class="font-mono text-slate-700 dark:text-slate-200">—</span>
+      </div>
+      <div class="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
+        <span class="text-slate-500">原始体积</span>
+        <span id="info-orig" class="font-mono text-slate-700 dark:text-slate-200">—</span>
+      </div>
+      <div class="flex justify-between border-b border-slate-100 py-1.5 dark:border-slate-800">
+        <span class="text-slate-500">输出体积</span>
+        <span id="info-out" class="font-mono text-slate-700 dark:text-slate-200">—</span>
+      </div>
+      <div class="flex justify-between py-1.5">
+        <span id="delta-label" class="text-slate-500">体积变化</span>
+        <span id="info-delta" class="font-mono font-semibold text-slate-700 dark:text-slate-200">—</span>
+      </div>
+    </div>
+  </div>
+</Tool>
+
+<style>
+  .mode-btn {
+    color: var(--color-slate-500);
+  }
+  .mode-btn.is-active {
+    background: var(--color-brand-600);
+    color: #fff;
+  }
+  :global(.dark) .mode-btn {
+    color: var(--color-slate-400);
+  }
+</style>
 
 <script>
   import {
     loadImage,
     imageToCanvas,
-    canvasToBlob,
+    toOutputBlob,
     flattenAlpha,
+    resizeCanvas,
     download,
     formatBytes,
     outName,
+    isLossyFormat,
+    detectAvif,
+    OUT_FORMATS,
     type ImageOutFormat,
   } from '../../lib/image/process';
 
   const drop = document.getElementById('drop') as HTMLLabelElement;
   const fileInput = document.getElementById('file') as HTMLInputElement;
-  const workspace = document.getElementById('workspace') as HTMLDivElement;
+  const modeConvert = document.getElementById('mode-convert') as HTMLButtonElement;
+  const modeCompress = document.getElementById('mode-compress') as HTMLButtonElement;
   const fmtEl = document.getElementById('fmt') as HTMLSelectElement;
+  const fmtWrap = document.getElementById('fmt-wrap') as HTMLLabelElement;
   const qualityWrap = document.getElementById('quality-wrap') as HTMLLabelElement;
   const quality = document.getElementById('quality') as HTMLInputElement;
   const qualityVal = document.getElementById('quality-val') as HTMLSpanElement;
   const flattenWrap = document.getElementById('flatten-wrap') as HTMLLabelElement;
   const flatten = document.getElementById('flatten') as HTMLInputElement;
+  const maxwWrap = document.getElementById('maxw-wrap') as HTMLLabelElement;
+  const maxw = document.getElementById('maxw') as HTMLInputElement;
   const downloadBtn = document.getElementById('download') as HTMLButtonElement;
   const preview = document.getElementById('preview') as HTMLImageElement;
+  const previewEmpty = document.getElementById('preview-empty') as HTMLDivElement;
   const infoDims = document.getElementById('info-dims') as HTMLSpanElement;
   const infoOrig = document.getElementById('info-orig') as HTMLSpanElement;
   const infoOut = document.getElementById('info-out') as HTMLSpanElement;
+  const deltaLabel = document.getElementById('delta-label') as HTMLSpanElement;
   const infoDelta = document.getElementById('info-delta') as HTMLSpanElement;
   const statusEl = document.getElementById('status') as HTMLDivElement;
 
   let canvas: HTMLCanvasElement | null = null;
   let originalBytes = 0;
   let originalName = 'image';
+  let mode: 'convert' | 'compress' = 'convert';
+  // 压缩模式下的输出格式（尽量保持原格式）
+  let outFmt: ImageOutFormat = 'image/png';
   let lastBlob: Blob | null = null;
   let lastUrl = '';
 
   function setStatus(msg: string, ok = true) {
     statusEl.textContent = msg;
-    statusEl.className = `h-5 text-sm ${ok ? 'text-slate-500' : 'text-red-600'}`;
+    statusEl.className = `text-xs ${ok ? 'text-slate-500' : 'text-red-600'}`;
   }
 
-  function isLossy(fmt: string) {
-    return fmt === 'image/jpeg' || fmt === 'image/webp';
+  /** 当前生效的输出格式（转换模式取下拉，压缩模式取原格式）。 */
+  function currentOutType(): ImageOutFormat {
+    return mode === 'convert' ? (fmtEl.value as ImageOutFormat) : outFmt;
+  }
+
+  /** 根据模式与格式刷新控件可见性。 */
+  function syncControls() {
+    const converting = mode === 'convert';
+    fmtWrap.classList.toggle('hidden', !converting);
+    fmtWrap.classList.toggle('flex', converting);
+    flattenWrap.classList.toggle('hidden', !(converting && fmtEl.value === 'image/jpeg'));
+    flattenWrap.classList.toggle('flex', converting && fmtEl.value === 'image/jpeg');
+    maxwWrap.classList.toggle('hidden', converting);
+    maxwWrap.classList.toggle('flex', !converting);
+    const lossy = isLossyFormat(currentOutType());
+    qualityWrap.classList.toggle('hidden', !lossy);
+    qualityWrap.classList.toggle('flex', lossy);
   }
 
   async function render() {
     if (!canvas) return;
-    const fmt = fmtEl.value as ImageOutFormat;
-    const q = Number(quality.value) / 100;
     let src = canvas;
-    if (fmt === 'image/jpeg' && flatten.checked) src = flattenAlpha(canvas, '#ffffff');
-    const blob = await canvasToBlob(src, fmt, isLossy(fmt) ? q : undefined);
+    let blob: Blob;
+    if (mode === 'convert') {
+      const type = fmtEl.value as ImageOutFormat;
+      const q = isLossyFormat(type) ? Number(quality.value) / 100 : undefined;
+      if (type === 'image/jpeg' && flatten.checked) src = flattenAlpha(canvas, '#ffffff');
+      blob = await toOutputBlob(src, type, q);
+    } else {
+      const q = isLossyFormat(outFmt) ? Number(quality.value) / 100 : undefined;
+      const mw = maxw.value ? Math.max(1, parseInt(maxw.value, 10)) : 0;
+      src = mw ? resizeCanvas(canvas, mw) : canvas;
+      blob = await toOutputBlob(src, outFmt, q);
+    }
     lastBlob = blob;
     if (lastUrl) URL.revokeObjectURL(lastUrl);
     lastUrl = URL.createObjectURL(blob);
     preview.src = lastUrl;
     infoOut.textContent = formatBytes(blob.size);
-    const delta = ((blob.size - originalBytes) / originalBytes) * 100;
-    const sign = delta >= 0 ? '+' : '';
-    infoDelta.textContent = `${sign}${delta.toFixed(1)}%`;
-    infoDelta.className = `font-mono font-semibold ${delta > 0 ? 'text-amber-600' : 'text-emerald-600'}`;
+    infoDelta.className = 'font-mono font-semibold ';
+    if (mode === 'convert') {
+      const diff = ((blob.size - originalBytes) / originalBytes) * 100;
+      const sign = diff >= 0 ? '+' : '';
+      infoDelta.textContent = `${sign}${diff.toFixed(1)}%`;
+      infoDelta.className += diff > 0 ? 'text-amber-600' : 'text-emerald-600';
+    } else {
+      const ratio = (1 - blob.size / originalBytes) * 100;
+      infoDelta.textContent = `${ratio.toFixed(1)}% 减小`;
+      infoDelta.className += ratio >= 0 ? 'text-emerald-600' : 'text-amber-600';
+    }
   }
 
   function onFile(file: File) {
@@ -167,25 +221,20 @@ const TOOL = '图片格式转换';
         originalName = file.name;
         infoDims.textContent = `${canvas.width} × ${canvas.height}`;
         infoOrig.textContent = formatBytes(file.size);
-        workspace.classList.remove('hidden');
-        workspace.classList.add('flex');
-        // 若原图是 jpeg，默认目标也选 jpeg；否则默认 png
-        if (file.type === 'image/jpeg') fmtEl.value = 'image/jpeg';
-        else if (file.type === 'image/webp') fmtEl.value = 'image/webp';
-        else fmtEl.value = 'image/png';
-        syncQualityVisibility();
-        setStatus('已载入，可调整格式与质量后下载');
+        // 压缩模式：输出格式尽量保持原格式（GIF/BMP 等无法编码的统一转 PNG）
+        outFmt = (['image/png', 'image/jpeg', 'image/webp'] as string[]).includes(file.type)
+          ? (file.type as ImageOutFormat)
+          : 'image/png';
+        // 转换模式：默认目标与源格式一致（若支持），否则 PNG
+        const supported = OUT_FORMATS.some((f) => f.type === file.type);
+        fmtEl.value = supported ? file.type : 'image/png';
+        previewEmpty.classList.add('hidden');
+        preview.classList.remove('hidden');
+        syncControls();
+        setStatus('已载入，可切换模式并下载');
         return render();
       })
       .catch((e: Error) => setStatus(e.message, false));
-  }
-
-  function syncQualityVisibility() {
-    const lossy = isLossy(fmtEl.value);
-    qualityWrap.classList.toggle('hidden', !lossy);
-    qualityWrap.classList.toggle('flex', lossy);
-    flattenWrap.classList.toggle('hidden', fmtEl.value !== 'image/jpeg');
-    flattenWrap.classList.toggle('flex', fmtEl.value === 'image/jpeg');
   }
 
   // 拖拽
@@ -209,8 +258,22 @@ const TOOL = '图片格式转换';
     if (fileInput.files?.[0]) onFile(fileInput.files[0]);
   });
 
+  function setMode(next: 'convert' | 'compress') {
+    mode = next;
+    const converting = next === 'convert';
+    modeConvert.classList.toggle('is-active', converting);
+    modeCompress.classList.toggle('is-active', !converting);
+    modeConvert.setAttribute('aria-pressed', String(converting));
+    modeCompress.setAttribute('aria-pressed', String(!converting));
+    deltaLabel.textContent = converting ? '体积变化' : '压缩比例';
+    syncControls();
+    render();
+  }
+  modeConvert.addEventListener('click', () => setMode('convert'));
+  modeCompress.addEventListener('click', () => setMode('compress'));
+
   fmtEl.addEventListener('change', () => {
-    syncQualityVisibility();
+    syncControls();
     render();
   });
   quality.addEventListener('input', () => {
@@ -218,8 +281,30 @@ const TOOL = '图片格式转换';
     render();
   });
   flatten.addEventListener('change', render);
+  maxw.addEventListener('input', render);
+
   downloadBtn.addEventListener('click', () => {
     if (!lastBlob) return;
-    download(lastBlob, outName(originalName, fmtEl.value as ImageOutFormat));
+    download(lastBlob, outName(originalName, currentOutType()));
+  });
+
+  // 动态生成格式下拉（AVIF 需运行时检测支持）
+  OUT_FORMATS.forEach((f) => {
+    if (f.type === 'image/avif') return; // 稍后按支持情况追加
+    const opt = document.createElement('option');
+    opt.value = f.type;
+    opt.textContent = f.label;
+    fmtEl.appendChild(opt);
+  });
+  detectAvif().then((ok) => {
+    if (ok) {
+      const f = OUT_FORMATS.find((x) => x.type === 'image/avif');
+      if (f) {
+        const opt = document.createElement('option');
+        opt.value = f.type;
+        opt.textContent = f.label;
+        fmtEl.appendChild(opt);
+      }
+    }
   });
 </script>

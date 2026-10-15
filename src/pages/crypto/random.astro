@@ -1,0 +1,212 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+---
+
+<Tool
+  title="随机生成器 · sw-tools"
+  toolName="随机生成器"
+  description="UUID v4、安全随机密码、Hex / Base64URL 令牌、PIN、随机整数（crypto.getRandomValues 强随机）。"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+  inputLabel="类型与参数"
+  outputLabel="结果"
+>
+  <button slot="input-tools" id="rnd-gen" class="btn-primary tool-btn-sm" title="重新生成">
+    <Icon name="refresh" size={14} /><span>生成</span>
+  </button>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div id="rnd-types" class="seg"></div>
+    <div id="rnd-opts" class="grid gap-3 sm:grid-cols-2"></div>
+    <p class="mt-auto text-xs leading-relaxed text-slate-400">
+      说明：全部基于 Web Crypto 的 crypto.getRandomValues，并对字符选取做了拒绝采样以消除取模偏差；
+      随机数仅在本页生成，不经过网络。
+    </p>
+  </div>
+
+  <button slot="output-tools" id="rnd-copy" class="tool-btn tool-btn-sm" title="复制全部结果">复制全部</button>
+
+  <textarea
+    slot="output"
+    id="rnd-out"
+    readonly
+    class="min-h-[14rem] w-full flex-1 resize-none bg-transparent p-3 font-mono text-sm leading-relaxed text-slate-800 outline-none lg:min-h-0 dark:text-slate-100"
+    placeholder="点击「生成」…"
+  ></textarea>
+</Tool>
+
+<script>
+  import {
+    uuidV4,
+    randomPassword,
+    randomTokenHex,
+    randomTokenB64Url,
+    randomPin,
+    randomInt,
+  } from '../../lib/crypto/random';
+
+  const typesEl = document.getElementById('rnd-types') as HTMLDivElement;
+  const optsEl = document.getElementById('rnd-opts') as HTMLDivElement;
+  const outEl = document.getElementById('rnd-out') as HTMLTextAreaElement;
+
+  interface Field {
+    id: string;
+    label: string;
+    type: 'number' | 'checkbox';
+    def: number | boolean;
+    min?: number;
+    max?: number;
+  }
+
+  const TYPES: Record<string, { label: string; fields: Field[] }> = {
+    uuid: {
+      label: 'UUID v4',
+      fields: [{ id: 'count', label: '数量', type: 'number', def: 5, min: 1, max: 100 }],
+    },
+    password: {
+      label: '随机密码',
+      fields: [
+        { id: 'count', label: '数量', type: 'number', def: 5, min: 1, max: 100 },
+        { id: 'length', label: '长度', type: 'number', def: 16, min: 4, max: 128 },
+        { id: 'upper', label: '大写字母 A-Z', type: 'checkbox', def: true },
+        { id: 'lower', label: '小写字母 a-z', type: 'checkbox', def: true },
+        { id: 'digits', label: '数字 0-9', type: 'checkbox', def: true },
+        { id: 'symbols', label: '符号 !@#…', type: 'checkbox', def: true },
+        { id: 'ambiguous', label: '排除易混淆字符（0O1lI 等）', type: 'checkbox', def: false },
+      ],
+    },
+    hex: {
+      label: 'Hex 令牌',
+      fields: [
+        { id: 'count', label: '数量', type: 'number', def: 3, min: 1, max: 50 },
+        { id: 'bytes', label: '字节数', type: 'number', def: 32, min: 4, max: 128 },
+      ],
+    },
+    b64: {
+      label: 'Base64URL 令牌',
+      fields: [
+        { id: 'count', label: '数量', type: 'number', def: 3, min: 1, max: 50 },
+        { id: 'bytes', label: '字节数', type: 'number', def: 32, min: 4, max: 128 },
+      ],
+    },
+    pin: {
+      label: '数字 PIN',
+      fields: [
+        { id: 'count', label: '数量', type: 'number', def: 5, min: 1, max: 100 },
+        { id: 'digits', label: '位数', type: 'number', def: 6, min: 1, max: 12 },
+      ],
+    },
+    int: {
+      label: '随机整数',
+      fields: [
+        { id: 'count', label: '数量', type: 'number', def: 5, min: 1, max: 100 },
+        { id: 'min', label: '最小值', type: 'number', def: 1, min: -1e15, max: 1e15 },
+        { id: 'max', label: '最大值', type: 'number', def: 100, min: -1e15, max: 1e15 },
+      ],
+    },
+  };
+
+  let current = 'uuid';
+
+  function buildTypes() {
+    typesEl.innerHTML = '';
+    for (const [id, t] of Object.entries(TYPES)) {
+      const btn = document.createElement('button');
+      btn.textContent = t.label;
+      if (id === current) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        current = id;
+        buildTypes();
+        buildOpts();
+      });
+      typesEl.appendChild(btn);
+    }
+  }
+
+  function num(id: string): number {
+    const el = document.getElementById(`rnd-${id}`) as HTMLInputElement | null;
+    return el ? parseFloat(el.value) : NaN;
+  }
+  const bool = (id: string): boolean =>
+    !!(document.getElementById(`rnd-${id}`) as HTMLInputElement | null)?.checked;
+
+  function buildOpts() {
+    optsEl.innerHTML = '';
+    for (const f of TYPES[current].fields) {
+      const wrap = document.createElement('div');
+      const lab = document.createElement('label');
+      lab.className = 'calc-label';
+      lab.textContent = f.label;
+      lab.htmlFor = `rnd-${f.id}`;
+      let input: HTMLInputElement;
+      if (f.type === 'checkbox') {
+        input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = !!f.def;
+        input.className = 'mt-1 h-4 w-4 accent-brand-600';
+        wrap.append(lab, input);
+      } else {
+        input = document.createElement('input');
+        input.type = 'number';
+        input.id = `rnd-${f.id}`;
+        input.value = String(f.def);
+        if (f.min !== undefined) input.min = String(f.min);
+        if (f.max !== undefined) input.max = String(f.max);
+        input.className = 'calc-input';
+        wrap.append(lab, input);
+      }
+      if (f.type === 'checkbox') input.id = `rnd-${f.id}`;
+      optsEl.appendChild(wrap);
+    }
+  }
+
+  function generate() {
+    const lines: string[] = [];
+    try {
+      const count = Math.max(1, Math.min(100, num('count') || 1));
+      if (current === 'uuid') {
+        for (let i = 0; i < count; i++) lines.push(uuidV4());
+      } else if (current === 'password') {
+        for (let i = 0; i < count; i++) {
+          lines.push(
+            randomPassword({
+              length: Math.max(4, Math.min(128, num('length') || 16)),
+              upper: bool('upper'),
+              lower: bool('lower'),
+              digits: bool('digits'),
+              symbols: bool('symbols'),
+              avoidAmbiguous: bool('ambiguous'),
+            })
+          );
+        }
+      } else if (current === 'hex') {
+        const bytes = Math.max(4, Math.min(128, num('bytes') || 32));
+        for (let i = 0; i < count; i++) lines.push(randomTokenHex(bytes));
+      } else if (current === 'b64') {
+        const bytes = Math.max(4, Math.min(128, num('bytes') || 32));
+        for (let i = 0; i < count; i++) lines.push(randomTokenB64Url(bytes));
+      } else if (current === 'pin') {
+        const digits = Math.max(1, Math.min(12, num('digits') || 6));
+        for (let i = 0; i < count; i++) lines.push(randomPin(digits));
+      } else if (current === 'int') {
+        const min = Math.floor(num('min'));
+        const max = Math.floor(num('max'));
+        for (let i = 0; i < count; i++) lines.push(String(randomInt(min, max)));
+      }
+      outEl.value = lines.join('\n');
+    } catch (e) {
+      outEl.value = '✗ ' + (e as Error).message;
+    }
+  }
+
+  document.getElementById('rnd-gen')?.addEventListener('click', generate);
+  document.getElementById('rnd-copy')?.addEventListener('click', async () => {
+    if (!outEl.value) return;
+    await navigator.clipboard.writeText(outEl.value);
+  });
+
+  buildTypes();
+  buildOpts();
+  generate();
+</script>

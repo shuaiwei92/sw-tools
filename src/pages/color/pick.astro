@@ -1,0 +1,282 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import Icon from '../../components/Icon.astro';
+---
+
+<Tool
+  title="图片取色器 · sw-tools"
+  toolName="图片取色器"
+  description="上传或粘贴图片，点击画面任意位置取色，自动提取主色板；附带 HEX / RGB / HSL、最近命名色与 WCAG 对比度建议，纯浏览器本地处理不上传。"
+  categoryHref="/#color"
+  categoryName="取色 / 配色"
+  inputLabel="图片"
+  outputLabel="取色结果"
+  columns="even"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3" id="pick-drop">
+    <div
+      id="drop-zone"
+      class="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-10 text-center transition hover:border-brand-400 dark:border-slate-600"
+    >
+      <Icon name="image" />
+      <p class="text-sm font-medium text-slate-600 dark:text-slate-300">拖拽图片到这里，或点击选择</p>
+      <p class="text-xs text-slate-400">支持 PNG / JPEG / WebP / GIF / BMP，也可以直接 Ctrl+V 粘贴</p>
+      <input id="file-input" type="file" accept="image/*" class="hidden" />
+      <button class="tool-btn tool-btn-sm" id="btn-choose"><Icon name="sample" /><span>选择图片</span></button>
+    </div>
+
+    <div id="canvas-wrap" class="hidden min-h-0 flex-1 flex-col">
+      <div class="flex items-center justify-between">
+        <span class="calc-label" id="img-info"></span>
+        <button class="tool-btn tool-btn-sm" id="btn-clear" title="移除图片"><Icon name="trash" /></button>
+      </div>
+      <div id="stage" class="mt-2 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-slate-700 dark:bg-slate-900">
+        <canvas id="canvas" class="max-h-full max-w-full cursor-crosshair rounded-lg" style="object-fit:contain"></canvas>
+      </div>
+      <p class="mt-1.5 text-xs text-slate-400">点击图片任意位置即可取色；取色结果与色板显示在右侧。</p>
+    </div>
+  </div>
+
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="pick-status"></span>
+    <button class="tool-btn tool-btn-sm" id="btn-copy-palette" title="复制色板为 CSS 变量"><Icon name="copy" /></button>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 当前颜色 -->
+    <div class="result-card" id="cur-card">
+      <div class="flex items-center gap-3">
+        <div id="cur-swatch" class="h-14 w-14 shrink-0 rounded-xl border border-slate-200 dark:border-slate-700" style="background:#6366f1"></div>
+        <div class="min-w-0 flex-1">
+          <p class="font-mono text-xl font-bold text-slate-700 dark:text-slate-200" id="cur-hex">#6366f1</p>
+          <p class="text-xs text-slate-400" id="cur-name">未命名</p>
+        </div>
+        <button class="tool-btn tool-btn-sm" id="btn-copy-hex" title="复制 HEX"><Icon name="copy" /></button>
+      </div>
+      <div class="kv">
+        <span class="k">RGB</span>
+        <span class="v font-mono" id="cur-rgb">rgb(99, 102, 241)</span>
+      </div>
+      <div class="kv">
+        <span class="k">HSL</span>
+        <span class="v font-mono" id="cur-hsl">hsl(239, 84%, 67%)</span>
+      </div>
+      <div class="kv">
+        <span class="k">WCAG 建议</span>
+        <span class="v" id="cur-contrast">—</span>
+      </div>
+    </div>
+
+    <!-- 主色板 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">主色板（点击设为目标色）</span>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">平均色 <b class="font-mono" id="avg-color">—</b></span>
+        </div>
+      </div>
+      <div class="mt-2 flex items-center gap-3">
+        <div class="seg" id="sort-seg">
+          <button data-sort="count" class="active">占比</button>
+          <button data-sort="light">亮度</button>
+          <button data-sort="hue">色相</button>
+        </div>
+        <label class="flex flex-1 items-center gap-2 text-xs text-slate-400">
+          数量
+          <input id="palette-count" type="range" min="2" max="8" value="6" class="w-full accent-brand-600" />
+          <b class="font-mono" id="count-val">6</b>
+        </label>
+      </div>
+      <div class="mt-2 grid grid-cols-4 gap-2" id="palette-grid"></div>
+    </div>
+
+    <div id="pick-empty" class="rounded-xl border border-slate-200 p-6 text-center text-xs text-slate-400 dark:border-slate-700">
+      上传图片后，这里会显示点击取出的颜色详情与自动提取的主色板。
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { extractPalette, pickAt, averageColor, sortPalette, nearestNamed, contrastSafe, type PaletteColor } from '../../lib/color/pick';
+  import { parseColor, formatRgb, formatHsl } from '../../lib/color/convert';
+
+  const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+
+  const MAX_DIM = 640;
+  let pixels: Uint8ClampedArray | null = null;
+  let imgW = 0;
+  let imgH = 0;
+  let palette: PaletteColor[] = [];
+  let sortBy: 'count' | 'light' | 'hue' = 'count';
+  let current = '#6366f1';
+
+  function setCurrent(hex: string): void {
+    current = hex;
+    const rgba = parseColor(hex);
+    if (!rgba) return;
+    ($('cur-swatch') as HTMLElement).style.background = hex;
+    $('cur-hex').textContent = hex;
+    $('cur-rgb').textContent = formatRgb(rgba);
+    $('cur-hsl').textContent = formatHsl(rgba);
+    const named = nearestNamed(hex);
+    $('cur-name').textContent = `≈ ${named.name}（${named.hex}，距离 ${named.distance}）`;
+    const safe = contrastSafe(hex);
+    $('cur-contrast').textContent = safe ? `文字用 ${safe.fg}，对比度 ${safe.ratio}:1（${safe.level}）` : '—';
+    $('pick-status').textContent = hex;
+  }
+
+  function renderPalette(): void {
+    const grid = $('palette-grid');
+    grid.innerHTML = '';
+    for (const c of sortPalette(palette, sortBy)) {
+      const cell = document.createElement('button');
+      cell.className = 'group flex flex-col overflow-hidden rounded-lg border border-slate-200 text-left transition hover:scale-[1.03] dark:border-slate-700';
+      cell.title = `${c.hex}（占比 ${(c.share * 100).toFixed(1)}%）`;
+      const sw = document.createElement('span');
+      sw.className = 'h-10 w-full';
+      sw.style.background = c.hex;
+      const label = document.createElement('span');
+      label.className = 'px-1.5 py-1 font-mono text-[0.6875rem] text-slate-500 dark:text-slate-400';
+      label.textContent = `${c.hex.replace('#', '')} ${(c.share * 100).toFixed(0)}%`;
+      cell.append(sw, label);
+      cell.addEventListener('click', () => setCurrent(c.hex));
+      grid.appendChild(cell);
+    }
+  }
+
+  function extract(): void {
+    if (!pixels) return;
+    const count = Number((document.getElementById('palette-count') as HTMLInputElement).value);
+    palette = extractPalette(pixels, count);
+    renderPalette();
+    const avg = averageColor(pixels);
+    $('avg-color').textContent = avg ?? '—';
+    $('pick-empty').classList.add('hidden');
+  }
+
+  function fitCanvas(): void {
+    const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+    const stage = $('stage');
+    const maxW = Math.max(120, stage.clientWidth - 20);
+    const maxH = Math.max(120, stage.clientHeight - 20);
+    const scale = Math.min(maxW / imgW, maxH / imgH, 2);
+    canvas.style.width = `${Math.round(imgW * scale)}px`;
+    canvas.style.height = `${Math.round(imgH * scale)}px`;
+  }
+
+  function loadFile(file: File): void {
+    if (!file.type.startsWith('image/')) return;
+    createImageBitmap(file)
+      .then((bmp) => {
+        const scale = Math.min(1, MAX_DIM / Math.max(bmp.width, bmp.height));
+        imgW = Math.max(1, Math.round(bmp.width * scale));
+        imgH = Math.max(1, Math.round(bmp.height * scale));
+        const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+        canvas.width = imgW;
+        canvas.height = imgH;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        ctx.drawImage(bmp, 0, 0, imgW, imgH);
+        pixels = ctx.getImageData(0, 0, imgW, imgH).data;
+        $('drop-zone').classList.add('hidden');
+        $('canvas-wrap').classList.remove('hidden');
+        $('canvas-wrap').classList.add('flex');
+        $('img-info').textContent = `${file.name || '剪贴板图片'} · ${bmp.width}×${bmp.height}`;
+        fitCanvas();
+        extract();
+      })
+      .catch(() => {
+        $('pick-status').textContent = '图片解码失败';
+      });
+  }
+
+  function clearImage(): void {
+    pixels = null;
+    palette = [];
+    $('drop-zone').classList.remove('hidden');
+    $('canvas-wrap').classList.add('hidden');
+    $('canvas-wrap').classList.remove('flex');
+    $('palette-grid').innerHTML = '';
+    $('avg-color').textContent = '—';
+    $('pick-empty').classList.remove('hidden');
+    $('pick-status').textContent = '';
+  }
+
+  // 文件选择 / 拖拽 / 粘贴
+  $('btn-choose').addEventListener('click', () => $('file-input').click());
+  ($('file-input') as HTMLInputElement).addEventListener('change', (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) loadFile(file);
+  });
+  const drop = $('pick-drop');
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    drop.classList.add('ring-2', 'ring-brand-400');
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('ring-2', 'ring-brand-400'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('ring-2', 'ring-brand-400');
+    const file = e.dataTransfer?.files?.[0];
+    if (file) loadFile(file);
+  });
+  document.addEventListener('paste', (e) => {
+    const file = e.clipboardData?.files?.[0];
+    if (file) loadFile(file);
+  });
+  $('btn-clear').addEventListener('click', clearImage);
+
+  // 点击取色
+  document.getElementById('canvas')!.addEventListener('click', (e) => {
+    if (!pixels) return;
+    const canvas = e.target as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const scale = canvas.clientWidth / imgW;
+    const x = Math.floor((e.clientX - rect.left) / scale);
+    const y = Math.floor((e.clientY - rect.top) / scale);
+    const hex = pickAt(pixels, imgW, x, y);
+    if (hex) setCurrent(hex);
+  });
+
+  // 排序与数量
+  document.querySelectorAll<HTMLButtonElement>('#sort-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      sortBy = btn.dataset.sort as 'count' | 'light' | 'hue';
+      document.querySelectorAll('#sort-seg button').forEach((b) => b.classList.toggle('active', b === btn));
+      renderPalette();
+    });
+  });
+  document.getElementById('palette-count')!.addEventListener('input', (e) => {
+    $('count-val').textContent = (e.target as HTMLInputElement).value;
+    extract();
+  });
+
+  // 复制
+  $('btn-copy-hex').addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(current);
+    } catch {
+      /* 忽略 */
+    }
+  });
+  $('btn-copy-palette').addEventListener('click', async () => {
+    if (!palette.length) return;
+    const lines = [':root {'];
+    sortPalette(palette, sortBy).forEach((c, i) => {
+      lines.push(`  --color-${i + 1}: ${c.hex}; /* ${(c.share * 100).toFixed(1)}% */`);
+    });
+    lines.push('}');
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'));
+      $('pick-status').textContent = '已复制色板 CSS 变量';
+    } catch {
+      /* 忽略 */
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    if (pixels) fitCanvas();
+  });
+
+  setCurrent('#6366f1');
+</script>

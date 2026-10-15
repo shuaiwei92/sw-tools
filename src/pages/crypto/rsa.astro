@@ -1,0 +1,164 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="RSA 加解密 / 签名 · sw-tools"
+  toolName="RSA 加解密 / 签名"
+  description="RSA 密钥对生成、RSA-OAEP 加解密、RSA-PSS 签名验签，支持 PEM 导入导出，全部本地计算。"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+  inputLabel="密钥"
+  outputLabel="加解密 / 签名"
+  columns="left-wide"
+>
+  <button slot="input-tools" id="rsa-gen" class="tool-btn tool-btn-sm" title="生成密钥对">生成密钥对</button>
+  <span slot="input-tools" id="rsa-gen-status" class="text-xs text-slate-400"></span>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col">
+    <div class="shrink-0 border-b border-slate-200 p-3 dark:border-slate-700">
+      <span class="calc-label">密钥长度</span>
+      <div id="rsa-bits" class="seg"></div>
+    </div>
+    <textarea
+      id="rsa-pub"
+      class="min-h-[8rem] w-full flex-1 resize-none border-b border-slate-200 bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none lg:min-h-0 dark:border-slate-700 dark:bg-slate-900/60"
+      placeholder="-----BEGIN PUBLIC KEY-----
+（公钥，加密 / 验签用，可粘贴导入）"
+      spellcheck="false"
+    ></textarea>
+    <textarea
+      id="rsa-priv"
+      class="min-h-[8rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+      placeholder="-----BEGIN PRIVATE KEY-----
+（私钥，解密 / 签名用，可粘贴导入）"
+      spellcheck="false"
+    ></textarea>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col">
+    <div class="shrink-0 border-b border-slate-200 p-3 dark:border-slate-700">
+      <span class="calc-label">操作</span>
+      <div id="rsa-ops" class="seg"></div>
+    </div>
+    <textarea
+      id="rsa-input"
+      class="min-h-[6rem] w-full shrink-0 resize-none border-b border-slate-200 bg-slate-50 p-3 font-mono text-sm leading-relaxed outline-none dark:border-slate-700 dark:bg-slate-900/60"
+      placeholder="在此输入内容…"
+    ></textarea>
+    <div class="flex shrink-0 items-center gap-2 border-b border-slate-200 px-3 py-2 dark:border-slate-700">
+      <button id="rsa-run" class="tool-btn tool-btn-sm" title="执行当前操作">执行</button>
+      <button id="rsa-copy" class="tool-btn tool-btn-sm" title="复制输出结果">复制结果</button>
+    </div>
+    <div
+      id="rsa-output"
+      class="min-h-[6rem] flex-1 overflow-y-auto whitespace-pre-wrap break-all p-3 font-mono text-sm text-slate-800 lg:min-h-0 dark:text-slate-100"
+    >结果将显示在此…</div>
+    <p class="shrink-0 border-t border-slate-200 p-3 text-xs leading-relaxed text-slate-400 dark:border-slate-700">
+      说明：加密使用 RSA-OAEP（SHA-256），2048 位密钥单次最多加密约 190 字节（大文本请改用 AES 工具）；
+      签名使用 RSA-PSS（SHA-256）。生成的密钥仅在当前浏览器内存中，刷新即丢失，请及时复制保存。
+    </p>
+  </div>
+</Tool>
+
+<script>
+  import {
+    generateRsaKeyPair,
+    rsaEncrypt,
+    rsaDecrypt,
+    rsaSign,
+    rsaVerify,
+    type RsaBits,
+  } from '../../lib/crypto/rsa';
+
+  const pubEl = document.getElementById('rsa-pub') as HTMLTextAreaElement;
+  const privEl = document.getElementById('rsa-priv') as HTMLTextAreaElement;
+  const inputEl = document.getElementById('rsa-input') as HTMLTextAreaElement;
+  const outputEl = document.getElementById('rsa-output') as HTMLDivElement;
+  const genStatus = document.getElementById('rsa-gen-status') as HTMLSpanElement;
+  const bitsEl = document.getElementById('rsa-bits') as HTMLDivElement;
+  const opsEl = document.getElementById('rsa-ops') as HTMLDivElement;
+
+  let bits: RsaBits = 2048;
+  let op: 'encrypt' | 'decrypt' | 'sign' | 'verify' = 'encrypt';
+
+  function buildSeg(el: HTMLDivElement, items: { id: string; label: string }[], get: () => string, set: (id: string) => void) {
+    el.innerHTML = '';
+    for (const it of items) {
+      const btn = document.createElement('button');
+      btn.textContent = it.label;
+      if (it.id === get()) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        set(it.id);
+        buildSeg(el, items, get, set);
+      });
+      el.appendChild(btn);
+    }
+  }
+
+  function show(text: string, ok = true) {
+    outputEl.textContent = text;
+    outputEl.classList.toggle('text-rose-600', !ok);
+    outputEl.classList.toggle('dark:text-rose-400', !ok);
+    outputEl.classList.toggle('text-slate-800', ok);
+    outputEl.classList.toggle('dark:text-slate-100', ok);
+  }
+
+  function buildAll() {
+    buildSeg(bitsEl, [{ id: '2048', label: '2048 位' }, { id: '3072', label: '3072 位' }, { id: '4096', label: '4096 位' }],
+      () => String(bits), (id) => { bits = parseInt(id, 10) as RsaBits; });
+    buildSeg(opsEl, [
+      { id: 'encrypt', label: '加密（公钥）' },
+      { id: 'decrypt', label: '解密（私钥）' },
+      { id: 'sign', label: '签名（私钥）' },
+      { id: 'verify', label: '验签（公钥）' },
+    ], () => op, (id) => { op = id as typeof op; });
+  }
+
+  document.getElementById('rsa-gen')?.addEventListener('click', async () => {
+    genStatus.textContent = '生成中（位数越大越慢）…';
+    try {
+      const { publicKey, privateKey } = await generateRsaKeyPair(bits);
+      pubEl.value = publicKey;
+      privEl.value = privateKey;
+      genStatus.textContent = '✓ 已生成，请复制保存';
+    } catch (e) {
+      genStatus.textContent = '✗ ' + (e as Error).message;
+    }
+  });
+
+  document.getElementById('rsa-run')?.addEventListener('click', async () => {
+    const input = inputEl.value;
+    if (!input.trim()) return show('请输入内容', false);
+    show('计算中…');
+    try {
+      if (op === 'encrypt') {
+        if (!pubEl.value.trim()) throw new Error('请先粘贴或生成公钥');
+        show(await rsaEncrypt(input, pubEl.value));
+      } else if (op === 'decrypt') {
+        if (!privEl.value.trim()) throw new Error('请先粘贴或生成私钥');
+        show(await rsaDecrypt(input, privEl.value));
+      } else if (op === 'sign') {
+        if (!privEl.value.trim()) throw new Error('请先粘贴或生成私钥');
+        show(await rsaSign(input, privEl.value));
+      } else {
+        if (!pubEl.value.trim()) throw new Error('请先粘贴或生成公钥');
+        const nl = input.lastIndexOf('\n');
+        if (nl < 0) throw new Error('验签输入需两行：第一行起为原文，最后一行为 Base64 签名');
+        const ok = await rsaVerify(input.slice(0, nl), input.slice(nl + 1).trim(), pubEl.value);
+        show(ok ? '✓ 验签通过：内容与签名匹配' : '✗ 验签未通过：内容与签名不匹配', ok);
+      }
+    } catch (e) {
+      show('✗ ' + (e as Error).message, false);
+    }
+  });
+
+  document.getElementById('rsa-copy')?.addEventListener('click', async () => {
+    const t = outputEl.textContent ?? '';
+    if (!t || t === '结果将显示在此…') return;
+    await navigator.clipboard.writeText(t);
+    show('已复制到剪贴板');
+  });
+
+  buildAll();
+</script>

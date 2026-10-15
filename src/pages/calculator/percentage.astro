@@ -1,0 +1,117 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="百分比计算器 · sw-tools"
+  toolName="百分比计算器"
+  description="占比、求百分比、增减、变化幅度、打折等多种模式，纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="参数"
+  outputLabel="结果"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-4 p-3">
+    <div id="pct-modes" class="seg"></div>
+    <div>
+      <label class="calc-label" id="pct-la" for="pct-a">数值 A</label>
+      <input id="pct-a" type="number" class="calc-input" placeholder="0" />
+    </div>
+    <div>
+      <label class="calc-label" id="pct-lb" for="pct-b">数值 B</label>
+      <input id="pct-b" type="number" class="calc-input" placeholder="0" />
+    </div>
+  </div>
+
+  <button slot="output-tools" id="pct-copy" class="tool-btn tool-btn-sm" title="复制结果">复制结果</button>
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-4 p-3">
+    <div class="result-card flex min-h-0 flex-1 flex-col justify-center">
+      <div class="text-xs text-slate-500 dark:text-slate-400" id="pct-rlabel">结果</div>
+      <div id="pct-value" class="mt-1 text-3xl font-bold text-brand-600 dark:text-brand-300">—</div>
+      <div id="pct-detail" class="mt-1 text-sm text-slate-500 dark:text-slate-400">输入数值后自动计算</div>
+    </div>
+    <div class="shrink-0 text-xs leading-relaxed text-slate-400">
+      <p class="mb-1 font-semibold text-slate-500 dark:text-slate-400">模式说明</p>
+      <p>· A 占 B 的%：A ÷ B × 100</p>
+      <p>· A 的 B%：A × B ÷ 100</p>
+      <p>· A 增加 B% / A 减少 B%：A × (1 ± B÷100)</p>
+      <p>· A → B 变化%：(B − A) ÷ A × 100</p>
+      <p>· A 打 B 折：A × B ÷ 100（如 80 表示八折）</p>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { pctWhat, pctOf, pctIncrease, pctDecrease, pctChange, pctDiscount } from '../../lib/calc/percentage';
+
+  const modes = document.getElementById('pct-modes') as HTMLDivElement;
+  const la = document.getElementById('pct-la') as HTMLLabelElement;
+  const lb = document.getElementById('pct-lb') as HTMLLabelElement;
+  const a = document.getElementById('pct-a') as HTMLInputElement;
+  const b = document.getElementById('pct-b') as HTMLInputElement;
+  const valueEl = document.getElementById('pct-value') as HTMLDivElement;
+  const detailEl = document.getElementById('pct-detail') as HTMLDivElement;
+  const rlabel = document.getElementById('pct-rlabel') as HTMLDivElement;
+
+  type ModeKey = 'what' | 'of' | 'increase' | 'decrease' | 'change' | 'discount';
+  const CONFIG: Record<ModeKey, { label: string; labels: [string, string]; resultLabel: string; run: (x: number, y: number) => { value: number; detail: string } }> = {
+    what: { label: 'A 占 B 的%', labels: ['A 的数值', 'B 的数值'], resultLabel: 'A 占 B 的比例', run: pctWhat },
+    of: { label: 'A 的 B%', labels: ['数值 A', '百分比 B（%）'], resultLabel: '结果', run: pctOf },
+    increase: { label: 'A 增加 B%', labels: ['基数 A', '增加百分比 B（%）'], resultLabel: '增加后', run: pctIncrease },
+    decrease: { label: 'A 减少 B%', labels: ['基数 A', '减少百分比 B（%）'], resultLabel: '减少后', run: pctDecrease },
+    change: { label: 'A → B 变化%', labels: ['原值 A', '新值 B'], resultLabel: '变化幅度', run: pctChange },
+    discount: { label: 'A 打 B 折', labels: ['原价 A', '折扣百分比（如 80 表示八折）'], resultLabel: '折后价', run: pctDiscount },
+  };
+  let current: ModeKey = 'what';
+
+  function buildModes() {
+    modes.innerHTML = '';
+    (Object.keys(CONFIG) as ModeKey[]).forEach((k) => {
+      const btn = document.createElement('button');
+      btn.textContent = CONFIG[k].label;
+      btn.dataset.mode = k;
+      if (k === current) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        current = k;
+        buildModes();
+        compute();
+      });
+      modes.appendChild(btn);
+    });
+  }
+
+  function applyLabels() {
+    la.textContent = CONFIG[current].labels[0];
+    lb.textContent = CONFIG[current].labels[1];
+    rlabel.textContent = CONFIG[current].resultLabel;
+  }
+
+  function compute() {
+    applyLabels();
+    const x = parseFloat(a.value);
+    const y = parseFloat(b.value);
+    if (Number.isNaN(x) || Number.isNaN(y)) {
+      valueEl.textContent = '—';
+      detailEl.textContent = '请输入两个有效数值';
+      return;
+    }
+    try {
+      const r = CONFIG[current].run(x, y);
+      valueEl.textContent = Number(r.value.toFixed(6)).toLocaleString('en-US', { maximumFractionDigits: 6 }) + (current === 'what' || current === 'change' ? ' %' : '');
+      detailEl.textContent = r.detail;
+    } catch (e) {
+      valueEl.textContent = '错误';
+      detailEl.textContent = (e as Error).message;
+    }
+  }
+
+  a.addEventListener('input', compute);
+  b.addEventListener('input', compute);
+  document.getElementById('pct-copy')?.addEventListener('click', async () => {
+    const t = valueEl.textContent ?? '';
+    if (!t || t === '—') return;
+    await navigator.clipboard.writeText(t);
+  });
+  buildModes();
+  compute();
+</script>

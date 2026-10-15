@@ -1,0 +1,331 @@
+---
+import Tool from '../../layouts/Tool.astro';
+
+/** 五个字段的取值范围与选项（周用 0=周日 … 6=周六）。 */
+const FIELDS = [
+  { key: 'minute', label: '分钟', min: 0, max: 59 },
+  { key: 'hour', label: '小时', min: 0, max: 23 },
+  { key: 'dom', label: '日', min: 1, max: 31 },
+  { key: 'month', label: '月', min: 1, max: 12 },
+  { key: 'dow', label: '星期', min: 0, max: 6 },
+] as const;
+
+const PRESETS: { name: string; expr: string }[] = [
+  { name: '每分钟', expr: '* * * * *' },
+  { name: '每 5 分钟', expr: '*/5 * * * *' },
+  { name: '每小时', expr: '0 * * * *' },
+  { name: '每天 0 点', expr: '0 0 * * *' },
+  { name: '每天 9 点', expr: '0 9 * * *' },
+  { name: '工作日 9 点', expr: '0 9 * * 1-5' },
+  { name: '每周一 10 点', expr: '0 10 * * 1' },
+  { name: '每月 1 号', expr: '0 0 1 * *' },
+  { name: '每年 1 月 1 日', expr: '0 0 1 1 *' },
+];
+---
+
+<Tool
+  title="Cron 生成器 · sw-tools"
+  toolName="Cron 生成器"
+  description="可视化生成 Cron 表达式：勾选式编辑、中文描述解析、未来执行时间预览，支持 @daily 等简写。"
+  categoryHref="/#network"
+  categoryName="网络运维"
+  inputLabel="表达式编辑"
+  outputLabel="解析与预览"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 字段切换 tab -->
+    <div class="flex gap-1" id="cron-tabs">
+      {FIELDS.map((f, i) => (
+        <button
+          class:list={[
+            'rounded-md px-2 py-1 text-xs transition',
+            i === 0 ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800',
+          ]}
+          data-field={f.key}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
+
+    <!-- 编辑区：每个字段一个面板 -->
+    {FIELDS.map((f, i) => (
+      <div class="cron-pane flex flex-col gap-2" data-pane={f.key} style={i === 0 ? '' : 'display:none'}>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <label class="flex cursor-pointer items-center gap-1">
+            <input type="radio" name={`mode-${f.key}`} value="star" class="accent-brand-600" checked />
+            每{f.label}
+          </label>
+          <label class="flex cursor-pointer items-center gap-1">
+            <input type="radio" name={`mode-${f.key}`} value="step" class="accent-brand-600" />
+            每隔
+            <input
+              type="number"
+              min="1"
+              class="w-12 rounded border border-slate-200 px-1 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+              data-step={f.key}
+            />
+            {f.label}
+          </label>
+          <label class="flex cursor-pointer items-center gap-1">
+            <input type="radio" name={`mode-${f.key}`} value="list" class="accent-brand-600" />
+            指定值
+          </label>
+        </div>
+        <div class="grid grid-cols-8 gap-1" data-values={f.key} style="display:none">
+          {Array.from({ length: f.max - f.min + 1 }, (_, k) => f.min + k).map((v) => (
+            <button
+              class="cron-val rounded border border-slate-200 py-0.5 text-[11px] text-slate-500 transition hover:border-brand-400 dark:border-slate-700"
+              data-v={v}
+            >
+              {f.key === 'dow' ? '日一二三四五六'[v] : v}
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    <!-- 常用预设 -->
+    <div>
+      <span class="calc-label">常用预设</span>
+      <div class="flex flex-wrap gap-1.5">
+        {PRESETS.map((p) => (
+          <button
+            class="cron-preset rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-500 transition hover:border-brand-400 hover:text-brand-600 dark:border-slate-700"
+            data-expr={p.expr}
+          >
+            {p.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+    <!-- 表达式 -->
+    <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <span class="calc-label">Cron 表达式</span>
+      <div class="mt-1 flex items-center gap-3">
+        <code id="cron-expr" class="font-mono text-2xl font-bold tracking-widest text-brand-600 dark:text-brand-300">* * * * *</code>
+        <button id="cron-copy" class="tool-btn tool-btn-sm" title="复制表达式">复制</button>
+      </div>
+      <p id="cron-desc" class="mt-2 text-sm text-slate-500 dark:text-slate-400">每分钟</p>
+      <p id="cron-error" class="mt-2 hidden text-sm text-rose-600 dark:text-rose-400"></p>
+    </div>
+
+    <!-- 未来执行 -->
+    <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <span class="calc-label">未来 5 次执行时间（本地时区）</span>
+      <div id="cron-next" class="mt-2 flex flex-col"></div>
+    </div>
+
+    <p class="text-xs leading-relaxed text-slate-400">
+      字段顺序：分钟 小时 日 月 星期；「日」与「星期」同时指定时按标准 cron 语义取并集。支持 @daily / @hourly 等简写，可直接在上方输入框输入后回车。
+    </p>
+  </div>
+</Tool>
+
+<script>
+  import { describeCronExpr, nextRuns, parseCron } from '../../lib/network/cron';
+
+  const FIELDS = [
+    { key: 'minute', label: '分钟', min: 0, max: 59 },
+    { key: 'hour', label: '小时', min: 0, max: 23 },
+    { key: 'dom', label: '日', min: 1, max: 31 },
+    { key: 'month', label: '月', min: 1, max: 12 },
+    { key: 'dow', label: '星期', min: 0, max: 6 },
+  ];
+  // 每个字段的当前选择：null = * ；{ step: n } = */n ；Set<number> = 指定值
+  const state: Record<string, null | { step: number } | Set<number>> = {
+    minute: null,
+    hour: null,
+    dom: null,
+    month: null,
+    dow: null,
+  };
+
+  const exprEl = document.getElementById('cron-expr')!;
+  const descEl = document.getElementById('cron-desc')!;
+  const errEl = document.getElementById('cron-error')!;
+  const nextEl = document.getElementById('cron-next')!;
+
+  function fieldSpec(key: string): string {
+    const s = state[key];
+    if (s === null) return '*';
+    if ('step' in s) return `*/${s.step}`;
+    const arr = [...(s as Set<number>)].sort((a, b) => a - b);
+    // 连续数字压缩为区间
+    const parts: string[] = [];
+    let start = arr[0];
+    let prev = arr[0];
+    for (const v of arr.slice(1)) {
+      if (v === prev + 1) {
+        prev = v;
+        continue;
+      }
+      parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+      start = v;
+      prev = v;
+    }
+    parts.push(start === prev ? `${start}` : `${start}-${prev}`);
+    return parts.join(',');
+  }
+
+  function currentExpr(): string {
+    return FIELDS.map((f) => fieldSpec(f.key)).join(' ');
+  }
+
+  function render() {
+    const expr = currentExpr();
+    exprEl.textContent = expr;
+    const parsed = parseCron(expr);
+    if (parsed.error) {
+      errEl.textContent = parsed.error;
+      errEl.classList.remove('hidden');
+      descEl.textContent = '—';
+      nextEl.innerHTML = '';
+      return;
+    }
+    errEl.classList.add('hidden');
+    descEl.textContent = describeCronExpr(expr);
+    const runs = nextRuns(expr, 5);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    nextEl.innerHTML = runs
+      .map(
+        (d, i) =>
+          `<div class="res-row"><span class="k">第 ${i + 1} 次</span><span class="v font-mono">${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}（周${'日一二三四五六'[d.getDay()]}）</span></div>`
+      )
+      .join('');
+  }
+
+  // 字段 tab 切换
+  const tabs = document.querySelectorAll('#cron-tabs button');
+  tabs.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = (btn as HTMLElement).dataset.field!;
+      tabs.forEach((b) => {
+        const active = b === btn;
+        b.className = `rounded-md px-2 py-1 text-xs transition ${
+          active ? 'bg-brand-600 text-white' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+        }`;
+      });
+      document.querySelectorAll('.cron-pane').forEach((p) => {
+        ((p as HTMLElement).dataset.pane === key ? p.classList.remove('hidden') : p.classList.add('hidden'));
+      });
+    });
+  });
+  // 修正：pane 用 style.display 控制
+  document.querySelectorAll('.cron-pane').forEach((p) => {
+    (p as HTMLElement).style.display = (p as HTMLElement).dataset.pane === 'minute' ? '' : 'none';
+  });
+
+  // 每个字段：模式 radios + 步进输入 + 值多选
+  FIELDS.forEach((f) => {
+    const radios = document.querySelectorAll<HTMLInputElement>(`input[name="mode-${f.key}"]`);
+    const stepInput = document.querySelector<HTMLInputElement>(`[data-step="${f.key}"]`);
+    const valuesBox = document.querySelector<HTMLElement>(`[data-values="${f.key}"]`)!;
+    const valBtns = valuesBox.querySelectorAll<HTMLButtonElement>('.cron-val');
+
+    const syncUi = () => {
+      const s = state[f.key];
+      const mode = s === null ? 'star' : 'step' in s ? 'step' : 'list';
+      radios.forEach((r) => (r.checked = r.value === mode));
+      valuesBox.style.display = mode === 'list' ? '' : 'none';
+      if (stepInput) stepInput.value = s && 'step' in s ? String(s.step) : '1';
+      valBtns.forEach((b) => {
+        const v = Number(b.dataset.v);
+        const on = s instanceof Set && s.has(v);
+        b.classList.toggle('bg-brand-600', on);
+        b.classList.toggle('text-white', on);
+        b.classList.toggle('border-brand-600', on);
+      });
+    };
+
+    radios.forEach((r) =>
+      r.addEventListener('change', () => {
+        if (r.value === 'star') state[f.key] = null;
+        else if (r.value === 'step') state[f.key] = { step: Math.max(1, Number(stepInput?.value) || 1) };
+        else state[f.key] = new Set();
+        syncUi();
+        render();
+      })
+    );
+    stepInput?.addEventListener('input', () => {
+      state[f.key] = { step: Math.max(1, Number(stepInput.value) || 1) };
+      render();
+    });
+    valBtns.forEach((b) =>
+      b.addEventListener('click', () => {
+        if (!(state[f.key] instanceof Set)) state[f.key] = new Set();
+        const v = Number(b.dataset.v);
+        const set = state[f.key] as Set<number>;
+        set.has(v) ? set.delete(v) : set.add(v);
+        if (!set.size) state[f.key] = null;
+        syncUi();
+        render();
+      })
+    );
+  });
+
+  // 预设
+  document.querySelectorAll('.cron-preset').forEach((btn) =>
+    btn.addEventListener('click', () => {
+      const expr = (btn as HTMLElement).dataset.expr!;
+      applyExpr(expr);
+    })
+  );
+
+  /** 把表达式反向填回编辑器状态 */
+  function applyExpr(expr: string) {
+    const parts = expr.trim().split(/\s+/);
+    if (parts.length !== 5) return;
+    const parsePart = (spec: string): null | { step: number } | Set<number> => {
+      if (spec === '*') return null;
+      const stepM = spec.match(/^\*\/(\d+)$/);
+      if (stepM) return { step: Number(stepM[1]) };
+      const set = new Set<number>();
+      for (const p of spec.split(',')) {
+        if (p.includes('-')) {
+          const [a, b] = p.split('-').map(Number);
+          for (let v = a; v <= b; v++) set.add(v);
+        } else set.add(Number(p));
+      }
+      return set.size ? set : null;
+    };
+    FIELDS.forEach((f, i) => (state[f.key] = parsePart(parts[i])));
+    // 同步各字段 UI（重新触发 syncUi：简化处理——直接刷新所有
+    document.querySelectorAll<HTMLInputElement>('input[type=radio][name^="mode-"]').forEach((r) => {
+      const key = r.name.replace('mode-', '');
+      const s = state[key];
+      const mode = s === null ? 'star' : 'step' in s ? 'step' : 'list';
+      r.checked = r.value === mode;
+    });
+    document.querySelectorAll<HTMLElement>('[data-values]').forEach((box) => {
+      const key = box.dataset.values!;
+      const s = state[key];
+      box.style.display = s instanceof Set ? '' : 'none';
+      box.querySelectorAll<HTMLButtonElement>('.cron-val').forEach((b) => {
+        const v = Number(b.dataset.v);
+        const on = s instanceof Set && s.has(v);
+        b.classList.toggle('bg-brand-600', on);
+        b.classList.toggle('text-white', on);
+        b.classList.toggle('border-brand-600', on);
+      });
+    });
+    document.querySelectorAll<HTMLInputElement>('[data-step]').forEach((inp) => {
+      const s = state[inp.dataset.step!];
+      inp.value = s && 'step' in s ? String(s.step) : '1';
+    });
+    render();
+  }
+
+  document.getElementById('cron-copy')!.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(exprEl.textContent ?? '');
+    const btn = document.getElementById('cron-copy') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制'), 1200);
+  });
+
+  render();
+</script>

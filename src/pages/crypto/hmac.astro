@@ -1,0 +1,82 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="HMAC 计算 · sw-tools"
+  description="HMAC-MD5 / SHA-1 / 256 / 384 / 512 消息认证码（Web Crypto + 本地 MD5），纯浏览器处理。"
+  toolName="HMAC 计算"
+  inputPlaceholder="在此粘贴待认证的消息文本…（失去焦点后计算）"
+  outputLabel="HMAC 值"
+  downloadName="hmac"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    密钥
+    <input
+      id="key"
+      type="text"
+      spellcheck="false"
+      placeholder="输入 HMAC 密钥"
+      class="w-40 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-xs outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-900"
+    />
+  </label>
+  <label slot="input-tools" class="ml-2 flex items-center gap-1 text-xs text-slate-500">
+    算法
+    <select
+      id="algo"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="SHA-256">HMAC-SHA256</option>
+      <option value="SHA-1">HMAC-SHA1</option>
+      <option value="SHA-384">HMAC-SHA384</option>
+      <option value="SHA-512">HMAC-SHA512</option>
+      <option value="MD5">HMAC-MD5</option>
+    </select>
+  </label>
+  <label slot="input-tools" class="ml-2 flex items-center gap-1 text-xs text-slate-500">
+    输出
+    <select
+      id="outfmt"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="hex">Hex</option>
+      <option value="base64">Base64</option>
+    </select>
+  </label>
+</Converter>
+
+<script>
+  import { hmacText, hmacTextBase64, type HmacAlgo } from '../../lib/crypto/hmac';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = 'The quick brown fox jumps over the lazy dog';
+
+  const keyEl = () => document.getElementById('key') as HTMLInputElement;
+  const algoEl = () => document.getElementById('algo') as HTMLSelectElement;
+  const outEl = () => document.getElementById('outfmt') as HTMLSelectElement;
+
+  setupConverter({
+    downloadName: 'hmac',
+    downloadExt: 'txt',
+    convert: async (input) => {
+      const algo = algoEl().value as HmacAlgo;
+      return outEl().value === 'base64'
+        ? hmacTextBase64(input, keyEl().value, algo)
+        : hmacText(input, keyEl().value, algo);
+    },
+    sample: SAMPLE,
+  });
+
+  // 密钥 / 算法 / 输出格式变化后立即重算
+  for (const id of ['key', 'algo', 'outfmt']) {
+    document.getElementById(id)?.addEventListener('input', () => {
+      document.getElementById('input')?.dispatchEvent(new Event('blur'));
+    });
+    document.getElementById(id)?.addEventListener('change', () => {
+      document.getElementById('input')?.dispatchEvent(new Event('blur'));
+    });
+  }
+</script>

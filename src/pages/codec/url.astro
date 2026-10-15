@@ -1,0 +1,66 @@
+---
+import Converter from '../../layouts/Converter.astro';
+---
+
+<Converter
+  title="URL 编解码 · sw-tools"
+  description="URL / query 参数编解码，支持 + 号与空格互转，自动识别方向，纯浏览器本地处理。"
+  toolName="URL 编解码"
+  inputPlaceholder="在此粘贴 URL 或待编码文本…（自动识别方向，失去焦点后转换）"
+  outputLabel="输出"
+  downloadName="url-result"
+  downloadExt="txt"
+  categoryHref="/#codec"
+  categoryName="编码 / 加密"
+>
+  <label slot="input-tools" class="ml-1 flex items-center gap-1 text-xs text-slate-500">
+    方向
+    <select
+      id="direction"
+      class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    >
+      <option value="auto">自动</option>
+      <option value="encode">文本 → URL 编码</option>
+      <option value="decode">URL 编码 → 文本</option>
+    </select>
+  </label>
+  <label
+    slot="input-tools"
+    class="ml-2 flex items-center gap-1 text-xs text-slate-500"
+    title="勾选后：编码时把 %20 写成 +，解码时把 + 还原为空格（application/x-www-form-urlencoded 语义）"
+  >
+    <input type="checkbox" id="form-mode" class="h-3.5 w-3.5 accent-brand-600" />
+    表单模式（+ ↔ 空格）
+  </label>
+</Converter>
+
+<script>
+  import { encodeUrl, decodeUrl, looksUrlEncoded } from '../../lib/codec/url';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  const SAMPLE = 'https://example.com/搜索?q=中文 工具&sort=price#结果';
+
+  const dirEl = () => document.getElementById('direction') as HTMLSelectElement;
+  const formEl = () => document.getElementById('form-mode') as HTMLInputElement;
+
+  setupConverter({
+    downloadName: 'url-result',
+    downloadExt: 'txt',
+    convert: (input) => {
+      const form = formEl().checked;
+      const opts = { spacePlus: form, plusToSpace: form };
+      const dir =
+        dirEl().value === 'auto' ? (looksUrlEncoded(input) ? 'decode' : 'encode') : dirEl().value;
+      return dir === 'decode' ? decodeUrl(input, opts) : encodeUrl(input, opts);
+    },
+    getDirection: () => dirEl().value,
+    detectDirection: (input) => (looksUrlEncoded(input) ? 'decode' : 'encode'),
+    directionLabels: { encode: '文本 → URL 编码', decode: 'URL 编码 → 文本' },
+    sample: SAMPLE,
+  });
+
+  // 表单模式切换后立即重算
+  formEl().addEventListener('change', () => {
+    document.getElementById('input')?.dispatchEvent(new Event('blur'));
+  });
+</script>

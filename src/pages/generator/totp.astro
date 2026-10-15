@@ -1,0 +1,138 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="TOTP / 2FA 验证码 · sw-tools"
+  toolName="TOTP / 2FA 验证码"
+  description="基于时间的一次性验证码（RFC 6238）：粘贴 Base32 密钥或 otpauth 链接即可生成，兼容 Google / Microsoft Authenticator。"
+  categoryHref="/#generator"
+  categoryName="生成器"
+  inputLabel="密钥配置"
+  outputLabel="验证码"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <div>
+      <label class="calc-label" for="totp-uri">otpauth 链接（可选，粘贴后自动填充）</label>
+      <textarea
+        id="totp-uri"
+        rows="2"
+        class="calc-input font-mono text-xs"
+        placeholder="otpauth://totp/Example:alice@google.com?secret=JBSWY3DPEHPK3PXP&issuer=Example"
+        spellcheck="false"
+      ></textarea>
+      <button id="totp-uri-parse" class="tool-btn tool-btn-sm mt-1" title="从链接解析密钥">解析链接</button>
+    </div>
+    <div>
+      <label class="calc-label" for="totp-secret">Base32 密钥</label>
+      <input id="totp-secret" class="calc-input font-mono text-sm" placeholder="如 JBSWY3DPEHPK3PXP" spellcheck="false" />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="totp-digits">位数</label>
+        <select id="totp-digits" class="calc-input text-sm">
+          <option value="6">6 位（常用）</option>
+          <option value="8">8 位</option>
+        </select>
+      </div>
+      <div>
+        <label class="calc-label" for="totp-period">周期（秒）</label>
+        <input id="totp-period" type="number" min="10" max="300" value="30" class="calc-input text-sm" />
+      </div>
+    </div>
+    <div id="totp-meta" class="hidden text-xs leading-relaxed text-slate-400"></div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-4">
+    <div id="totp-code" class="font-mono text-5xl font-bold tracking-[0.3em] text-brand-600 dark:text-brand-300">------</div>
+    <div class="h-2 w-64 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      <div id="totp-bar" class="h-full rounded-full bg-brand-500 transition-[width] duration-1000 ease-linear" style="width: 100%"></div>
+    </div>
+    <div id="totp-countdown" class="text-sm text-slate-400">30 秒后刷新</div>
+    <button id="totp-copy" class="tool-btn" title="复制当前验证码">复制验证码</button>
+    <p id="totp-error" class="hidden max-w-full break-all text-center text-xs text-rose-600 dark:text-rose-400"></p>
+    <p class="max-w-sm text-center text-xs leading-relaxed text-slate-400">
+      全部本地计算，密钥不会上传。时钟不准会导致验证失败——请确保设备时间与网络同步。
+    </p>
+  </div>
+</Tool>
+
+<script>
+  import { parseOtpauth, totp } from '../../lib/generator/totp';
+
+  const uriEl = document.getElementById('totp-uri') as HTMLTextAreaElement;
+  const secretEl = document.getElementById('totp-secret') as HTMLInputElement;
+  const digitsEl = document.getElementById('totp-digits') as HTMLSelectElement;
+  const periodEl = document.getElementById('totp-period') as HTMLInputElement;
+  const metaEl = document.getElementById('totp-meta')!;
+  const codeEl = document.getElementById('totp-code')!;
+  const barEl = document.getElementById('totp-bar')!;
+  const countdownEl = document.getElementById('totp-countdown')!;
+  const errorEl = document.getElementById('totp-error')!;
+
+  let timer: number | undefined;
+
+  function tick() {
+    const secret = secretEl.value.trim();
+    errorEl.classList.add('hidden');
+    if (!secret) {
+      codeEl.textContent = '------';
+      barEl.style.width = '100%';
+      countdownEl.textContent = '等待输入密钥';
+      return;
+    }
+    const digits = Number(digitsEl.value);
+    const period = Math.min(300, Math.max(10, Number(periodEl.value) || 30));
+    try {
+      const r = totp(secret, { period, digits });
+      codeEl.textContent = r.code;
+      const pct = Math.round((r.remaining / period) * 100);
+      barEl.style.width = `${pct}%`;
+      countdownEl.textContent = `${r.remaining} 秒后刷新`;
+    } catch (e) {
+      errorEl.textContent = (e as Error).message;
+      errorEl.classList.remove('hidden');
+      codeEl.textContent = '------';
+    }
+  }
+
+  function scheduleTick() {
+    if (timer) clearInterval(timer);
+    tick();
+    timer = window.setInterval(tick, 1000);
+  }
+
+  document.getElementById('totp-uri-parse')!.addEventListener('click', () => {
+    const r = parseOtpauth(uriEl.value);
+    if ('error' in r) {
+      errorEl.textContent = r.error;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    errorEl.classList.add('hidden');
+    secretEl.value = r.secret;
+    digitsEl.value = String(r.digits);
+    periodEl.value = String(r.period);
+    metaEl.classList.remove('hidden');
+    metaEl.innerHTML = `发行方：<b class="text-slate-600 dark:text-slate-300">${escapeHtml(r.issuer || '—')}</b><br>账户：<b class="text-slate-600 dark:text-slate-300">${escapeHtml(r.account || '—')}</b>`;
+    scheduleTick();
+  });
+
+  [secretEl, digitsEl, periodEl].forEach((el) => el.addEventListener('input', scheduleTick));
+
+  document.getElementById('totp-copy')!.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(codeEl.textContent ?? '');
+    const btn = document.getElementById('totp-copy') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制验证码'), 1200);
+  });
+
+  function escapeHtml(s: string): string {
+    return s.replace(/[&<>"']/g, (c) => `&${({ '&': 'amp', '<': 'lt', '>': 'gt', '"': 'quot', "'": 'apos' } as Record<string, string>)[c]};`);
+  }
+
+  // 预填示例密钥（JBSWY3DPEHPK3PXP = "Hello!=====" 的 Base32），打开即见效果
+  secretEl.value = 'JBSWY3DPEHPK3PXP';
+  scheduleTick();
+</script>

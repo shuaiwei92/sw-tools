@@ -1,79 +1,74 @@
 ---
-import Base from '../../layouts/Base.astro';
+import Tool from '../../layouts/Tool.astro';
 import Icon from '../../components/Icon.astro';
-
-const CATEGORY = { href: '/#image', name: '图片处理' };
-const TOOL = '裁剪 / 翻转 / 旋转';
 ---
 
-<Base title={`${TOOL} · sw-tools`} description="拖拽裁剪、水平/垂直翻转、旋转 90°/180°/270°，全部在本地浏览器完成。">
-  <div class="mx-auto flex w-full max-w-5xl flex-col gap-4">
-    <div>
-      <h1 class="text-xl font-bold">{TOOL}</h1>
-      <nav class="mt-1 flex items-center gap-1.5 text-xs" aria-label="面包屑">
-        <a href="/" class="cursor-pointer text-brand-600 transition hover:text-brand-700 hover:underline underline-offset-2" title="返回首页">首页</a>
-        <span class="text-slate-300 dark:text-slate-600">/</span>
-        <a href={CATEGORY.href} class="cursor-pointer text-slate-400 transition hover:text-brand-600 hover:underline underline-offset-2 dark:text-slate-500" title="查看分类下全部工具">{CATEGORY.name}</a>
-        <span class="text-slate-300 dark:text-slate-600">/</span>
-        <span class="cursor-default font-medium text-slate-700 dark:text-slate-200">{TOOL}</span>
-      </nav>
-      <p class="mt-2 text-sm text-slate-500">
-        在预览图上拖拽选框裁剪，或用按钮翻转 / 旋转。所有操作均在本地完成，下载为 PNG（无损、保留透明）。
-      </p>
-    </div>
-
+<Tool
+  title="裁剪 / 翻转 / 旋转 · sw-tools"
+  toolName="裁剪 / 翻转 / 旋转"
+  description="拖拽裁剪、水平/垂直翻转、旋转 90°/180°/270°，全部在本地浏览器完成。"
+  categoryHref="/#image"
+  categoryName="图片处理"
+  inputLabel="上传与操作"
+  outputLabel="预览"
+  columns="left-narrow"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 拖拽上传 -->
     <label
       id="drop"
-      class="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center transition hover:border-brand-500 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-400"
+      class="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center transition hover:border-brand-500 hover:bg-brand-50/40 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-400"
     >
-      <Icon name="crop" size={28} class="text-slate-400" />
+      <Icon name="crop" size={24} class="text-slate-400" />
       <span class="text-sm font-medium text-slate-600 dark:text-slate-300">拖拽图片到此处，或点击选择文件</span>
       <span class="text-xs text-slate-400">支持 PNG / JPEG / WebP 等</span>
       <input id="file" type="file" accept="image/*" class="hidden" />
     </label>
 
-    <div id="workspace" class="hidden flex-col gap-4">
-      <!-- 工具条 -->
-      <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-        <button class="tool-btn tool-btn-sm" data-act="flip-h" title="水平翻转"><Icon name="flip" size={15} /><span>水平翻转</span></button>
-        <button class="tool-btn tool-btn-sm" data-act="flip-v" title="垂直翻转"><Icon name="flip" size={15} class="rotate-90" /><span>垂直翻转</span></button>
-        <span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
-        <button class="tool-btn tool-btn-sm" data-act="rot-90" title="顺时针旋转 90°">↻ 90°</button>
-        <button class="tool-btn tool-btn-sm" data-act="rot-180" title="旋转 180°">↻ 180°</button>
-        <button class="tool-btn tool-btn-sm" data-act="rot-270" title="顺时针旋转 270°">↻ 270°</button>
-        <span class="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700"></span>
-        <button class="tool-btn tool-btn-sm" data-act="apply-crop" title="将选框区域裁切为当前图"><Icon name="crop" size={15} /><span>应用裁剪</span></button>
-        <button class="tool-btn tool-btn-sm" data-act="reset-sel" title="选框恢复为整图">整图选框</button>
-        <button class="tool-btn tool-btn-sm" data-act="reset" title="恢复原始图片">重置</button>
-        <button id="download" class="tool-btn tool-btn-sm ml-auto" title="下载当前图片（PNG）"><Icon name="download" size={15} /><span>下载</span></button>
-      </div>
-
-      <!-- 预览 + 选框 -->
-      <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <div class="grid flex-1 place-items-center overflow-auto rounded-lg border border-slate-100 bg-[repeating-conic-gradient(#e5e7eb_0deg_90deg,#fff_90deg_180deg)] bg-[length:16px_16px] p-3 dark:border-slate-800 dark:bg-[repeating-conic-gradient(#1e293b_0deg_90deg,#0f172a_90deg_180deg)]">
-          <div id="stage" class="relative inline-block leading-none">
-            <canvas id="preview" class="block max-w-full"></canvas>
-            <div id="sel" class="absolute cursor-move border-2 border-brand-500 bg-brand-500/10">
-              <span id="sel-handle" class="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-brand-600"></span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 选框数值微调 -->
-        <div class="flex flex-wrap items-end gap-3 text-sm">
-          <span class="font-medium text-slate-600 dark:text-slate-300">选框（像素）：</span>
-          <label class="flex items-center gap-1">X<input id="cx" type="number" min="0" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
-          <label class="flex items-center gap-1">Y<input id="cy" type="number" min="0" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
-          <label class="flex items-center gap-1">宽<input id="cw" type="number" min="1" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
-          <label class="flex items-center gap-1">高<input id="ch" type="number" min="1" class="w-20 rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
-          <span id="dims" class="ml-auto font-mono text-xs text-slate-400"></span>
-        </div>
-      </div>
+    <!-- 工具条 -->
+    <div class="flex flex-wrap gap-1.5">
+      <button class="tool-btn tool-btn-sm" data-act="flip-h" title="水平翻转"><Icon name="flip" size={14} /><span>水平翻转</span></button>
+      <button class="tool-btn tool-btn-sm" data-act="flip-v" title="垂直翻转"><Icon name="flip" size={14} class="rotate-90" /><span>垂直翻转</span></button>
+      <span class="mx-1 h-5 w-px self-center bg-slate-200 dark:bg-slate-700"></span>
+      <button class="tool-btn tool-btn-sm" data-act="rot-90" title="顺时针旋转 90°">↻ 90°</button>
+      <button class="tool-btn tool-btn-sm" data-act="rot-180" title="旋转 180°">↻ 180°</button>
+      <button class="tool-btn tool-btn-sm" data-act="rot-270" title="顺时针旋转 270°">↻ 270°</button>
+      <span class="mx-1 h-5 w-px self-center bg-slate-200 dark:bg-slate-700"></span>
+      <button class="tool-btn tool-btn-sm" data-act="apply-crop" title="将选框区域裁切为当前图"><Icon name="crop" size={14} /><span>应用裁剪</span></button>
+      <button class="tool-btn tool-btn-sm" data-act="reset-sel" title="选框恢复为整图">整图选框</button>
+      <button class="tool-btn tool-btn-sm" data-act="reset" title="恢复原始图片">重置</button>
     </div>
 
-    <div id="status" class="h-5 text-sm text-slate-500" role="status" aria-live="polite"></div>
+    <!-- 选框数值微调 -->
+    <div class="grid grid-cols-2 gap-2 text-sm">
+      <label class="flex items-center gap-1">X<input id="cx" type="number" min="0" class="w-full rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+      <label class="flex items-center gap-1">Y<input id="cy" type="number" min="0" class="w-full rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+      <label class="flex items-center gap-1">宽<input id="cw" type="number" min="1" class="w-full rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+      <label class="flex items-center gap-1">高<input id="ch" type="number" min="1" class="w-full rounded-md border border-slate-200 px-1.5 py-1 text-sm outline-none focus:border-brand-500 dark:border-slate-700 dark:bg-slate-950" /></label>
+    </div>
+    <span id="dims" class="font-mono text-xs text-slate-400"></span>
+
+    <div id="status" class="text-xs text-slate-500" role="status" aria-live="polite"></div>
   </div>
-</Base>
+
+  <button slot="output-tools" id="download" class="btn-primary tool-btn-sm" title="下载当前图片（PNG）">
+    <Icon name="download" size={14} /><span>下载 PNG</span>
+  </button>
+
+  <div
+    slot="output"
+    id="stage-box"
+    class="grid min-h-0 flex-1 place-items-center overflow-hidden bg-[repeating-conic-gradient(#e5e7eb_0deg_90deg,#fff_90deg_180deg)] bg-[length:16px_16px] p-3 dark:bg-[repeating-conic-gradient(#1e293b_0deg_90deg,#0f172a_90deg_180deg)]"
+  >
+    <div id="stage-empty" class="text-center text-sm text-slate-400">上传图片后，预览与选框将显示在此处</div>
+    <div id="stage" class="relative hidden leading-none">
+      <canvas id="preview" class="block"></canvas>
+      <div id="sel" class="absolute cursor-move border-2 border-brand-500 bg-brand-500/10">
+        <span id="sel-handle" class="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-sm border border-white bg-brand-600"></span>
+      </div>
+    </div>
+  </div>
+</Tool>
 
 <style>
   #sel { touch-action: none; }
@@ -92,8 +87,9 @@ const TOOL = '裁剪 / 翻转 / 旋转';
 
   const drop = document.getElementById('drop') as HTMLLabelElement;
   const fileInput = document.getElementById('file') as HTMLInputElement;
-  const workspace = document.getElementById('workspace') as HTMLDivElement;
+  const stageBox = document.getElementById('stage-box') as HTMLDivElement;
   const stage = document.getElementById('stage') as HTMLDivElement;
+  const stageEmpty = document.getElementById('stage-empty') as HTMLDivElement;
   const preview = document.getElementById('preview') as HTMLCanvasElement;
   const selEl = document.getElementById('sel') as HTMLDivElement;
   const handle = document.getElementById('sel-handle') as HTMLSpanElement;
@@ -118,7 +114,7 @@ const TOOL = '裁剪 / 翻转 / 旋转';
 
   function setStatus(msg: string, ok = true) {
     statusEl.textContent = msg;
-    statusEl.className = `h-5 text-sm ${ok ? 'text-slate-500' : 'text-red-600'}`;
+    statusEl.className = `text-xs ${ok ? 'text-slate-500' : 'text-red-600'}`;
   }
 
   function cloneCanvas(src: HTMLCanvasElement): HTMLCanvasElement {
@@ -132,6 +128,17 @@ const TOOL = '裁剪 / 翻转 / 旋转';
   function dispScale(): number {
     if (!preview.width) return 1;
     return preview.clientWidth / preview.width;
+  }
+
+  /** 把画布显示尺寸缩放到适配右栏容器（保持宽高比，整图可见）。 */
+  function fitPreview() {
+    if (!work) return;
+    const availW = Math.max(1, stageBox.clientWidth - 24);
+    const availH = Math.max(1, stageBox.clientHeight - 24);
+    const scale = Math.min(availW / work.width, availH / work.height, 1);
+    preview.style.width = `${Math.max(1, Math.round(work.width * scale))}px`;
+    preview.style.height = `${Math.max(1, Math.round(work.height * scale))}px`;
+    updateOverlay();
   }
 
   function resetSel() {
@@ -162,7 +169,7 @@ const TOOL = '裁剪 / 翻转 / 旋转';
     preview.height = work.height;
     preview.getContext('2d')!.drawImage(work, 0, 0);
     dims.textContent = `当前 ${work.width} × ${work.height} px`;
-    updateOverlay();
+    fitPreview();
   }
 
   function clamp(v: number, min: number, max: number) {
@@ -177,8 +184,8 @@ const TOOL = '裁剪 / 翻转 / 旋转';
         work = imageToCanvas(img);
         original = cloneCanvas(work);
         originalName = file.name;
-        workspace.classList.remove('hidden');
-        workspace.classList.add('flex');
+        stageEmpty.classList.add('hidden');
+        stage.classList.remove('hidden');
         resetSel();
         render();
         setStatus('已载入，可拖拽选框裁剪或翻转 / 旋转');
@@ -256,7 +263,7 @@ const TOOL = '裁剪 / 翻转 / 旋转';
   handle.addEventListener('pointermove', onPointerMove);
   selEl.addEventListener('pointerup', onPointerUp);
   handle.addEventListener('pointerup', onPointerUp);
-  window.addEventListener('resize', updateOverlay);
+  window.addEventListener('resize', fitPreview);
 
   // ---- 数值微调 ----
   function applyInputs() {
@@ -272,7 +279,7 @@ const TOOL = '裁剪 / 翻转 / 旋转';
   [cx, cy, cw, ch].forEach((el) => el.addEventListener('input', applyInputs));
 
   // ---- 工具条 ----
-  workspace.querySelectorAll('[data-act]').forEach((btn) => {
+  document.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const act = (btn as HTMLElement).dataset.act;
       if (act === 'flip-h') applyFlip(true, false);

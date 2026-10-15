@@ -1,0 +1,50 @@
+---
+import Converter from '../../layouts/Converter.astro';
+import { NAME_STYLES } from '../../lib/text/naming';
+---
+
+<Converter
+  title="命名风格转换 · sw-tools"
+  description="camelCase / snake_case / kebab-case / PascalCase / CONSTANT_CASE 互转，按行处理标识符。"
+  toolName="命名风格转换"
+  inputPlaceholder="每行一个标识符，如 userName、user_name、user-name…"
+  outputLabel="转换结果"
+  downloadName="naming"
+  downloadExt="txt"
+  categoryHref="/#text"
+  categoryName="文本处理"
+>
+  <div slot="input-tools" class="ml-1 flex flex-wrap items-center gap-1 text-xs text-slate-500">
+    目标风格
+    <div id="style-seg" class="seg">
+      {NAME_STYLES.map((s) => (
+        <button data-style={s.id} class:list={{ active: s.id === 'snake' }} title={s.example}>
+          {s.label}
+        </button>
+      ))}
+    </div>
+  </div>
+</Converter>
+
+<script>
+  import { convertNaming, type NameStyle } from '../../lib/text/naming';
+  import { setupConverter } from '../../lib/convert/converter-ui';
+
+  let style: NameStyle = 'snake';
+
+  document.querySelectorAll<HTMLButtonElement>('#style-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#style-seg button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      style = btn.dataset.style as NameStyle;
+      document.getElementById('input')?.dispatchEvent(new Event('blur'));
+    });
+  });
+
+  setupConverter({
+    downloadName: 'naming',
+    downloadExt: 'txt',
+    convert: (input) => convertNaming(input, style),
+    sample: 'userName\norder_id\nHTTP-server\nuser address',
+  });
+</script>

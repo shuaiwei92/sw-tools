@@ -1,0 +1,101 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="文本对比 · sw-tools"
+  description="两段文本逐行对比，高亮新增 / 删除行并统计差异，纯浏览器本地处理。"
+  toolName="文本对比"
+  categoryHref="/#text"
+  categoryName="文本处理"
+  inputLabel="原文 / 新文本"
+  outputLabel="对比结果"
+>
+  <label slot="input-tools" class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+    <input type="checkbox" id="ignore-ws" class="accent-brand-600" />
+    忽略行首尾空白
+  </label>
+
+  <div slot="input" class="flex min-h-0 flex-1 flex-col">
+    <textarea
+      id="old-text"
+      class="min-h-[9rem] w-full flex-1 resize-none border-b border-slate-200 bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none lg:min-h-0 dark:border-slate-700 dark:bg-slate-900/60"
+      placeholder="粘贴原始文本…"
+      spellcheck="false"
+    ></textarea>
+    <textarea
+      id="new-text"
+      class="min-h-[9rem] w-full flex-1 resize-none bg-slate-50 p-3 font-mono text-xs leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+      placeholder="粘贴修改后的文本…"
+      spellcheck="false"
+    ></textarea>
+  </div>
+
+  <button slot="output-tools" id="run" class="tool-btn tool-btn-sm" title="开始对比（Ctrl/Cmd + Enter）">开始对比</button>
+  <button slot="output-tools" id="copy" class="tool-btn tool-btn-sm" title="复制对比结果">复制结果</button>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col">
+    <div id="stats" class="hidden shrink-0 flex-wrap gap-2 border-b border-slate-200 px-3 py-2 text-sm dark:border-slate-700"></div>
+    <div id="diff-body" class="min-h-0 flex-1 overflow-auto font-mono text-sm leading-relaxed"></div>
+  </div>
+</Tool>
+
+<script>
+  import { diffLines, diffStats } from '../../lib/text/diff';
+
+  const oldEl = document.getElementById('old-text') as HTMLTextAreaElement;
+  const newEl = document.getElementById('new-text') as HTMLTextAreaElement;
+  const wsEl = document.getElementById('ignore-ws') as HTMLInputElement;
+  const statsEl = document.getElementById('stats')!;
+  const bodyEl = document.getElementById('diff-body')!;
+
+  const escapeHtml = (s: string) =>
+    s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
+
+  let lastText = '';
+
+  function run() {
+    const rows = diffLines(oldEl.value, newEl.value, wsEl.checked);
+    const st = diffStats(rows);
+    statsEl.classList.remove('hidden');
+    statsEl.classList.add('flex');
+    statsEl.innerHTML = [
+      `<span class="rounded-md bg-emerald-50 px-2 py-1 font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">+ 新增 ${st.added} 行</span>`,
+      `<span class="rounded-md bg-rose-50 px-2 py-1 font-medium text-rose-700 dark:bg-rose-950 dark:text-rose-300">- 删除 ${st.removed} 行</span>`,
+      `<span class="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">= 相同 ${st.same} 行</span>`,
+    ].join('');
+
+    bodyEl.innerHTML = rows
+      .map((r) => {
+        const no = r.type === 'del' ? r.oldNo : (r.newNo ?? '');
+        const cls =
+          r.type === 'add'
+            ? 'bg-emerald-50 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200'
+            : r.type === 'del'
+              ? 'bg-rose-50 text-rose-900 dark:bg-rose-950/50 dark:text-rose-200'
+              : 'text-slate-600 dark:text-slate-300';
+        const mark = r.type === 'add' ? '+' : r.type === 'del' ? '-' : ' ';
+        return `<div class="flex gap-2 px-3 py-1 ${cls}"><span class="w-8 shrink-0 text-right text-slate-400 select-none">${no}</span><span class="w-3 shrink-0 select-none">${mark}</span><span class="whitespace-pre-wrap break-all">${escapeHtml(r.text) || '&nbsp;'}</span></div>`;
+      })
+      .join('');
+
+    lastText = rows
+      .map((r) => `${r.type === 'add' ? '+' : r.type === 'del' ? '-' : ' '} ${r.text}`)
+      .join('\n');
+  }
+
+  document.getElementById('run')!.addEventListener('click', run);
+  document.getElementById('copy')!.addEventListener('click', async () => {
+    if (!lastText) return;
+    await navigator.clipboard.writeText(lastText);
+    const btn = document.getElementById('copy') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制结果'), 1200);
+  });
+  // Ctrl/Cmd + Enter 快捷对比
+  [oldEl, newEl].forEach((el) =>
+    el.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
+    })
+  );
+</script>

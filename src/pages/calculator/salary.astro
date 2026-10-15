@@ -1,0 +1,476 @@
+---
+import Tool from '../../layouts/Tool.astro';
+import { ANNUAL_TAX_BRACKETS, CITY_PRESETS, ANNUAL_BASIC_DEDUCTION } from '../../lib/calc/tax';
+
+const CITY_OPTIONS = Object.entries(CITY_PRESETS).map(([id, c]) => ({ id, name: c.name, note: c.note }));
+
+/** 年度综合所得税率表（起征点 60000 之后的级距） */
+const TAX_TABLE = {
+  head: ['级数', '年应纳税所得额', '税率', '速算扣除数'],
+  rows: ANNUAL_TAX_BRACKETS.map((b, i) => [
+    String(i + 1),
+    i === ANNUAL_TAX_BRACKETS.length - 1 ? `超过 960,000 元` : `不超过 ${b.upTo.toLocaleString('zh-CN')} 元`,
+    `${(b.rate * 100).toFixed(0)}%`,
+    b.deduct.toLocaleString('zh-CN'),
+  ]),
+};
+
+/** 自定义比例输入项（个人 + 单位） */
+const RATE_FIELDS: { key: keyof typeof CITY_PRESETS.beijing.rates; label: string; side: 'p' | 'e' }[] = [
+  { key: 'pensionPersonal', label: '养老', side: 'p' },
+  { key: 'medicalPersonal', label: '医疗', side: 'p' },
+  { key: 'unemploymentPersonal', label: '失业', side: 'p' },
+  { key: 'housingFundPersonal', label: '公积金', side: 'p' },
+  { key: 'pensionEmployer', label: '养老', side: 'e' },
+  { key: 'medicalEmployer', label: '医疗', side: 'e' },
+  { key: 'unemploymentEmployer', label: '失业', side: 'e' },
+  { key: 'injuryEmployer', label: '工伤', side: 'e' },
+  { key: 'maternityEmployer', label: '生育', side: 'e' },
+  { key: 'housingFundEmployer', label: '公积金', side: 'e' },
+];
+---
+
+<Tool
+  title="个税 / 五险一金计算器 · sw-tools"
+  toolName="个税 / 五险一金计算器"
+  description="月度工资与年终奖的税后收入测算：五险一金明细、专项附加扣除、合并计税与单独计税对比，自动选择更优方式。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="收入与扣除"
+  outputLabel="税后测算"
+  columns="left-wide"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 城市预设 -->
+    <div>
+      <label class="calc-label" for="in-city">社保城市预设</label>
+      <select id="in-city" class="calc-input">
+        {CITY_OPTIONS.map((c) => <option value={c.id}>{c.name}</option>)}
+      </select>
+      <p class="mt-1 text-xs leading-relaxed text-slate-400" id="city-note"></p>
+    </div>
+
+    <!-- 自定义比例 -->
+    <div class="hidden" data-g="custom-rates">
+      <span class="calc-label">缴费比例（%）</span>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="space-y-1.5">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">个人缴纳</p>
+          {RATE_FIELDS.filter((f) => f.side === 'p').map((f) => (
+            <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span class="w-12 shrink-0">{f.label}</span>
+              <input type="number" step="0.1" min="0" max="30" class="calc-input py-1 text-xs" data-rate={f.key} />
+            </label>
+          ))}
+        </div>
+        <div class="space-y-1.5">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">单位缴纳</p>
+          {RATE_FIELDS.filter((f) => f.side === 'e').map((f) => (
+            <label class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <span class="w-12 shrink-0">{f.label}</span>
+              <input type="number" step="0.1" min="0" max="30" class="calc-input py-1 text-xs" data-rate={f.key} />
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- 月薪 -->
+    <div>
+      <label class="calc-label" for="in-salary">税前月薪（元）</label>
+      <input id="in-salary" type="number" class="calc-input" value="20000" min="0" step="500" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5" data-preset="salary">
+        <button class="preset-chip" data-v="5000">5 千</button>
+        <button class="preset-chip" data-v="10000">1 万</button>
+        <button class="preset-chip" data-v="20000">2 万</button>
+        <button class="preset-chip" data-v="30000">3 万</button>
+        <button class="preset-chip" data-v="50000">5 万</button>
+      </div>
+    </div>
+
+    <!-- 计薪月数 + 年终奖 -->
+    <div class="flex gap-2">
+      <div class="flex-1">
+        <label class="calc-label" for="in-months">计薪月数</label>
+        <input id="in-months" type="number" class="calc-input" value="12" min="1" max="12" step="1" />
+      </div>
+      <div class="flex-1">
+        <label class="calc-label" for="in-bonus">年终奖（元）</label>
+        <input id="in-bonus" type="number" class="calc-input" value="30000" min="0" step="5000" />
+      </div>
+    </div>
+    <div class="-mt-1.5 flex flex-wrap gap-1.5" data-preset="bonus">
+      <button class="preset-chip" data-v="0">无</button>
+      <button class="preset-chip" data-v="10000">1 万</button>
+      <button class="preset-chip" data-v="30000">3 万</button>
+      <button class="preset-chip" data-v="50000">5 万</button>
+      <button class="preset-chip" data-v="100000">10 万</button>
+    </div>
+
+    <!-- 社保基数 -->
+    <div>
+      <label class="calc-label" for="in-base">社保缴费基数（元 / 月）</label>
+      <input id="in-base" type="number" class="calc-input" value="20000" min="0" step="500" />
+      <div class="mt-1.5 flex flex-wrap gap-1.5">
+        <button class="preset-chip" id="btn-base-same" title="社保基数 = 税前月薪">同月薪</button>
+        <button class="preset-chip" id="btn-base-min" title="社保基数 = 当地下限常见口径（6000）">按下限 6000</button>
+      </div>
+      <p class="mt-1 text-xs text-slate-400">各地缴费基数有上下限，本工具未内置；按实际申报基数填写。</p>
+    </div>
+
+    <!-- 专项附加扣除 -->
+    <div>
+      <span class="calc-label">专项附加扣除（月标准，2023 年起）</span>
+      <div class="space-y-2">
+        <div class="flex gap-2">
+          <div class="flex-1">
+            <label class="calc-label" for="in-child">子女教育（个）</label>
+            <input id="in-child" type="number" class="calc-input" value="0" min="0" max="10" step="1" />
+          </div>
+          <div class="flex-1">
+            <label class="calc-label" for="in-infant">婴幼儿照护（个）</label>
+            <input id="in-infant" type="number" class="calc-input" value="0" min="0" max="10" step="1" />
+          </div>
+        </div>
+        <p class="-mt-1 text-xs text-slate-400">每个子女 / 婴幼儿 2,000 元/月</p>
+        <div class="flex gap-2">
+          <div class="flex-1">
+            <label class="calc-label" for="in-edu">继续教育（人）</label>
+            <input id="in-edu" type="number" class="calc-input" value="0" min="0" max="5" step="1" />
+          </div>
+          <div class="flex-1">
+            <label class="calc-label" for="in-elderly">赡养老人（元/月）</label>
+            <input id="in-elderly" type="number" class="calc-input" value="0" min="0" max="3000" step="500" />
+          </div>
+        </div>
+        <p class="-mt-1 text-xs text-slate-400">学历继续教育 400 元/月；赡养老人独生子女全额 3,000 元/月，非独生按分摊额填写</p>
+        <div>
+          <span class="calc-label">住房贷款利息（首套，1,000 元/月）</span>
+          <div class="seg w-full" id="mortgage-seg">
+            <button class="flex-1 active" data-m="0">无</button>
+            <button class="flex-1" data-m="1">有（首套）</button>
+          </div>
+        </div>
+        <div>
+          <span class="calc-label">住房租金（与房贷利息二选一）</span>
+          <div class="seg w-full" id="rent-seg">
+            <button class="flex-1 active" data-r="0">无</button>
+            <button class="flex-1" data-r="1">直辖市 / 省会 1,500</button>
+            <button class="flex-1" data-r="2">大城市 1,100</button>
+            <button class="flex-1" data-r="3">中小城市 800</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 其他扣除 -->
+    <div>
+      <label class="calc-label" for="in-other">其他月度扣除（元）</label>
+      <input id="in-other" type="number" class="calc-input" value="0" min="0" step="100" />
+      <p class="mt-1 text-xs text-slate-400">如个人商业健康保险（限额 200 元/月）、税延养老保险等。</p>
+    </div>
+
+    <!-- 税率表 -->
+    <details class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <summary class="cursor-pointer text-xs font-semibold text-slate-600 dark:text-slate-300">年度综合所得税率表</summary>
+      <div class="mt-2 overflow-x-auto">
+        <table class="w-full text-left text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+          <thead>
+            <tr class="text-slate-400">
+              {TAX_TABLE.head.map((h) => <th class="py-1 pr-2 font-medium whitespace-nowrap">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {TAX_TABLE.rows.map((r) => (
+              <tr class="border-t border-slate-100 dark:border-slate-800">
+                {r.map((c, i) => <td class:list={['py-1 pr-2', i === 0 && 'font-medium text-slate-600 dark:text-slate-300']}>{c}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-2 text-[11px] text-slate-400">
+        基本减除费用 {ANNUAL_BASIC_DEDUCTION.toLocaleString('zh-CN')} 元/年（即起征点 5,000 元/月）；年终奖单独计税按月换算税率表。数据为静态口径，仅供参考，以税务机关计算为准。
+      </p>
+    </details>
+  </div>
+
+  <span slot="output-tools">
+    <span class="text-xs text-slate-400" id="salary-status"></span>
+  </span>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <!-- 汇总 -->
+    <div class="result-card space-y-0" id="summary">
+      <div class="kv"><span class="k">月均到手</span><span class="v big" id="s-monthly-net">—</span></div>
+      <div class="kv"><span class="k">全年到手（含年终奖）</span><span class="v" id="s-annual-net">—</span></div>
+      <div class="kv"><span class="k">全年税前合计</span><span class="v" id="s-annual-gross">—</span></div>
+      <div class="kv"><span class="k">全年个税</span><span class="v" id="s-annual-tax">—</span></div>
+      <div class="kv"><span class="k">综合税负率（税 / 税前）</span><span class="v" id="s-effective">—</span></div>
+    </div>
+
+    <!-- 计税方式对比 -->
+    <div class="rounded-xl border border-brand-200 bg-brand-50 p-3 text-xs leading-relaxed dark:border-slate-700 dark:bg-slate-800/40" id="method-card">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">年终奖计税方式对比</span>
+      <div class="mt-1 grid grid-cols-2 gap-2">
+        <div class="rounded-lg bg-white/70 p-2 dark:bg-slate-900/50">
+          <div class="text-slate-400">合并计税</div>
+          <div class="text-base font-bold tabular-nums" id="m-merged">—</div>
+        </div>
+        <div class="rounded-lg bg-white/70 p-2 dark:bg-slate-900/50">
+          <div class="text-slate-400">单独计税</div>
+          <div class="text-base font-bold tabular-nums" id="m-separate">—</div>
+        </div>
+      </div>
+      <p class="mt-1.5 text-slate-600 dark:text-slate-300" id="m-verdict">—</p>
+    </div>
+
+    <!-- 五险一金明细 -->
+    <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+      <div class="flex items-center justify-between border-b border-slate-100 px-3 py-1.5 dark:border-slate-800">
+        <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">五险一金明细（按月）</span>
+        <span class="text-xs text-slate-400" id="social-base-label"></span>
+      </div>
+      <div class="overflow-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+            <tr>
+              <th class="px-3 py-2">项目</th>
+              <th class="px-3 py-2">个人比例</th>
+              <th class="px-3 py-2">个人金额</th>
+              <th class="px-3 py-2">单位比例</th>
+              <th class="px-3 py-2">单位金额</th>
+            </tr>
+          </thead>
+          <tbody id="social-rows" class="zebra font-mono text-slate-600 dark:text-slate-300"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 年度构成 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">年度应税构成（合并计税口径）</span>
+      <div class="mt-1" id="annual-rows"></div>
+    </div>
+
+    <!-- 企业成本 -->
+    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <span class="text-[0.8125rem] font-semibold text-slate-600 dark:text-slate-300">用人单位年度总成本</span>
+      <div class="mt-1" id="cost-rows"></div>
+    </div>
+  </div>
+</Tool>
+
+<script>
+  import { CITY_PRESETS, calcSalary, type SocialRates, type SpecialDeductions } from '../../lib/calc/tax';
+  import { fmt, fmtCN, pct } from '../../lib/calc/format';
+
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const inCity = $<HTMLSelectElement>('in-city');
+  const inSalary = $<HTMLInputElement>('in-salary');
+  const inMonths = $<HTMLInputElement>('in-months');
+  const inBonus = $<HTMLInputElement>('in-bonus');
+  const inBase = $<HTMLInputElement>('in-base');
+  const inChild = $<HTMLInputElement>('in-child');
+  const inInfant = $<HTMLInputElement>('in-infant');
+  const inEdu = $<HTMLInputElement>('in-edu');
+  const inElderly = $<HTMLInputElement>('in-elderly');
+  const inOther = $<HTMLInputElement>('in-other');
+  const cityNote = $('city-note');
+  const statusEl = $('salary-status');
+  const socialBaseLabel = $('social-base-label');
+  const socialRows = $('social-rows');
+  const annualRows = $('annual-rows');
+  const costRows = $('cost-rows');
+
+  /** 当前生效的比例（城市预设或自定义编辑后的副本） */
+  let rates: SocialRates = { ...CITY_PRESETS.beijing.rates };
+  const state = { mortgage: 0, rent: 0 };
+
+  const num = (el: HTMLInputElement, fallback: number) => {
+    const v = parseFloat(el.value);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const yuan = (n: number) => '¥' + fmt(n);
+
+  /** 读取自定义比例输入 → SocialRates（百分比 ÷ 100） */
+  function readCustomRates(): SocialRates {
+    const out = { ...rates } as Record<string, number>;
+    document.querySelectorAll<HTMLInputElement>('[data-rate]').forEach((el) => {
+      const v = parseFloat(el.value);
+      out[el.dataset.rate!] = Number.isFinite(v) ? v / 100 : 0;
+    });
+    return out as unknown as SocialRates;
+  }
+
+  /** 把当前比例写回自定义输入框（切换城市时同步显示） */
+  function writeCustomRates(r: SocialRates) {
+    document.querySelectorAll<HTMLInputElement>('[data-rate]').forEach((el) => {
+      const v = (r as unknown as Record<string, number>)[el.dataset.rate!];
+      el.value = String(Math.round((v ?? 0) * 10000) / 100);
+    });
+  }
+
+  function syncCity() {
+    const preset = CITY_PRESETS[inCity.value] ?? CITY_PRESETS.custom;
+    cityNote.textContent = preset.note;
+    document.querySelectorAll<HTMLElement>('[data-g="custom-rates"]').forEach((el) => el.classList.toggle('hidden', inCity.value !== 'custom'));
+    if (inCity.value !== 'custom') {
+      rates = { ...preset.rates };
+      writeCustomRates(rates);
+    }
+  }
+
+  function special(): SpecialDeductions {
+    return {
+      childrenEducation: Math.max(0, Math.round(num(inChild, 0))),
+      infantCare: Math.max(0, Math.round(num(inInfant, 0))),
+      continuingEducation: Math.max(0, Math.round(num(inEdu, 0))),
+      mortgageInterest: (state.mortgage ? 1 : 0) as 0 | 1,
+      rentTier: state.rent as 0 | 1 | 2 | 3,
+      elderlySupport: Math.max(0, num(inElderly, 0)),
+    };
+  }
+
+  function render() {
+    const salary = num(inSalary, 0);
+    const months = Math.min(12, Math.max(1, Math.round(num(inMonths, 12))));
+    const bonus = Math.max(0, num(inBonus, 0));
+    const base = Math.max(0, num(inBase, salary));
+    if (inCity.value === 'custom') rates = readCustomRates();
+
+    if (salary <= 0) {
+      statusEl.textContent = '请输入税前月薪';
+      $('s-monthly-net').textContent = '—';
+      $('s-annual-net').textContent = '—';
+      $('s-annual-gross').textContent = '—';
+      $('s-annual-tax').textContent = '—';
+      $('s-effective').textContent = '—';
+      $('m-merged').textContent = '—';
+      $('m-separate').textContent = '—';
+      $('m-verdict').textContent = '—';
+      socialRows.innerHTML = '';
+      annualRows.innerHTML = '';
+      costRows.innerHTML = '';
+      return;
+    }
+    statusEl.textContent = '';
+
+    const res = calcSalary({
+      monthlySalary: salary,
+      months,
+      annualBonus: bonus,
+      socialBase: base,
+      rates,
+      special: special(),
+      otherMonthlyDeduction: Math.max(0, num(inOther, 0)),
+    });
+
+    // 汇总
+    $('s-monthly-net').textContent = yuan(res.monthly.net);
+    $('s-monthly-net').title = `约 ${fmtCN(res.monthly.net)}`;
+    $('s-annual-net').textContent = yuan(res.annual.net);
+    $('s-annual-net').title = `约 ${fmtCN(res.annual.net)}`;
+    $('s-annual-gross').textContent = yuan(res.annual.gross + bonus);
+    $('s-annual-tax').textContent = yuan(res.annual.betterMethod === 'separate' ? res.annual.taxSeparate : res.annual.taxMerged);
+    $('s-effective').textContent = pct(res.annual.effectiveRate) + '%';
+
+    // 计税方式对比
+    $('m-merged').textContent = yuan(res.annual.taxMerged);
+    $('m-separate').textContent = yuan(res.annual.taxSeparate);
+    if (bonus <= 0) {
+      $('m-verdict').textContent = '未填写年终奖，两种方式结果一致。';
+    } else if (res.annual.betterMethod === 'separate') {
+      $('m-verdict').textContent = `✓ 建议单独计税：比合并计税少缴 ${yuan(res.annual.taxSavedByChoice)}（已按单独计税测算到手收入）`;
+    } else {
+      $('m-verdict').textContent = `✓ 建议合并计税：比单独计税少缴 ${yuan(res.annual.taxSavedByChoice)}（已按合并计税测算到手收入）`;
+    }
+
+    // 五险一金明细（个人 / 单位按项目合并展示）
+    const pMap = new Map(res.social.personal.items.map((x) => [x.label, x]));
+    const eMap = new Map(res.social.employer.items.map((x) => [x.label, x]));
+    const labels = [...new Set([...res.social.personal.items.map((x) => x.label), ...res.social.employer.items.map((x) => x.label)])];
+    socialBaseLabel.textContent = `缴费基数 ${fmt(res.social.base)} 元/月`;
+    const row = (label: string, p?: { rate: number; amount: number }, e?: { rate: number; amount: number }) =>
+      `<tr class="border-b border-slate-100 dark:border-slate-800">
+        <td class="px-3 py-1.5 font-sans">${label}</td>
+        <td class="px-3 py-1.5">${p && p.rate ? pct(p.rate * 100, 2) : '—'}</td>
+        <td class="px-3 py-1.5">${p ? fmt(p.amount) : '—'}</td>
+        <td class="px-3 py-1.5">${e && e.rate ? pct(e.rate * 100, 2) : '—'}</td>
+        <td class="px-3 py-1.5">${e ? fmt(e.amount) : '—'}</td>
+      </tr>`;
+    socialRows.innerHTML =
+      labels.map((l) => row(l, pMap.get(l), eMap.get(l))).join('') +
+      `<tr class="border-t-2 border-slate-200 bg-slate-50 font-semibold dark:border-slate-600 dark:bg-slate-800/60">
+        <td class="px-3 py-1.5 font-sans">合计</td>
+        <td class="px-3 py-1.5"></td>
+        <td class="px-3 py-1.5">${fmt(res.social.personal.total)}</td>
+        <td class="px-3 py-1.5"></td>
+        <td class="px-3 py-1.5">${fmt(res.social.employer.total)}</td>
+      </tr>`;
+
+    // 年度构成
+    const kv = (k: string, v: string, title?: string) =>
+      `<div class="kv"><span class="k">${k}</span><span class="v" ${title ? `title="${title}"` : ''}>${v}</span></div>`;
+    const finalTax = res.annual.betterMethod === 'separate' ? res.annual.taxSeparate : res.annual.taxMerged;
+    annualRows.innerHTML =
+      kv('工资薪金（月薪 × 月数）', yuan(res.annual.gross)) +
+      kv('年终奖', bonus > 0 ? yuan(bonus) : '—') +
+      kv('基本减除费用', `−${fmt(60000)}`) +
+      kv('五险一金（个人，全年）', `−${fmt(res.annual.socialPersonal)}`) +
+      kv('专项附加扣除（全年）', `−${fmt(res.annual.special)}`) +
+      kv('其他扣除（全年）', res.annual.other > 0 ? `−${fmt(res.annual.other)}` : '—') +
+      kv('应纳税所得额（合并口径）', fmt(res.annual.taxableMerged)) +
+      kv(`全年个税（${res.annual.betterMethod === 'separate' ? '单独' : '合并'}计税）`, yuan(finalTax)) +
+      kv('其中：年终奖税额', bonus > 0 ? yuan(res.annual.bonusTax) : '—');
+
+    // 企业成本
+    costRows.innerHTML =
+      kv('年度工资 + 年终奖', yuan(res.annual.gross + bonus)) +
+      kv('五险一金（单位，全年）', yuan(res.social.employer.total * res.months)) +
+      kv('用人单位年度总成本', yuan(res.employerCost), `约 ${fmtCN(res.employerCost)}`);
+  }
+
+  // ---- 事件 ----
+  inCity.addEventListener('change', () => {
+    syncCity();
+    render();
+  });
+  [inSalary, inMonths, inBonus, inBase, inChild, inInfant, inEdu, inElderly, inOther].forEach((el) =>
+    el.addEventListener('input', render)
+  );
+  document.querySelectorAll<HTMLElement>('[data-preset]').forEach((box) => {
+    const target = box.dataset.preset === 'salary' ? inSalary : inBonus;
+    box.querySelectorAll<HTMLButtonElement>('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        target.value = btn.dataset.v!;
+        render();
+      });
+    });
+  });
+  $('btn-base-same').addEventListener('click', () => {
+    inBase.value = inSalary.value;
+    render();
+  });
+  $('btn-base-min').addEventListener('click', () => {
+    inBase.value = '6000';
+    render();
+  });
+  document.querySelectorAll<HTMLInputElement>('[data-rate]').forEach((el) => el.addEventListener('input', render));
+
+  const bindSeg = (id: string, key: 'mortgage' | 'rent') => {
+    $(id).querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        $(id).querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        (state as unknown as Record<string, number>)[key] = Number(btn.dataset[key === 'mortgage' ? 'm' : 'r']);
+        render();
+      });
+    });
+  };
+  bindSeg('mortgage-seg', 'mortgage');
+  bindSeg('rent-seg', 'rent');
+
+  syncCity();
+  render();
+</script>

@@ -1,0 +1,163 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="复利计算器 · sw-tools"
+  toolName="复利计算器"
+  description="本金 + 每期定投的复利终值、本息构成与利息占比，纯本地计算。"
+  categoryHref="/#calculator"
+  categoryName="计算器"
+  inputLabel="参数"
+  outputLabel="收益分析"
+>
+  <div slot="input" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <div>
+      <label class="calc-label" for="cp-p">初始本金（元）</label>
+      <input id="cp-p" type="number" class="calc-input" value="100000" />
+    </div>
+    <div>
+      <label class="calc-label" for="cp-c">每期投入（元）</label>
+      <input id="cp-c" type="number" class="calc-input" value="2000" />
+    </div>
+    <div>
+      <label class="calc-label" for="cp-r">年化收益率（%）</label>
+      <input id="cp-r" type="number" step="0.1" class="calc-input" value="8" />
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="calc-label" for="cp-y">投资年限（年）</label>
+        <input id="cp-y" type="number" class="calc-input" value="20" />
+      </div>
+      <div>
+        <label class="calc-label" for="cp-f">每年期数</label>
+        <select id="cp-f" class="calc-input">
+          <option value="12">按月（12）</option>
+          <option value="4">按季（4）</option>
+          <option value="1">按年（1）</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col gap-3 p-3">
+    <!-- 终值总览 -->
+    <div class="result-card flex shrink-0 items-end justify-between">
+      <div>
+        <div class="text-xs text-slate-500 dark:text-slate-400">期末总资产（终值）</div>
+        <div id="cp-fv" class="mt-1 text-2xl font-bold text-brand-600 dark:text-brand-300">—</div>
+      </div>
+      <div class="text-right">
+        <div class="text-xs text-slate-500 dark:text-slate-400">收益占比</div>
+        <div id="cp-ratio" class="mt-1 text-lg font-semibold tabular-nums text-slate-700 dark:text-slate-200">—</div>
+      </div>
+    </div>
+
+    <!-- 图表卡：环形图 + 大堆叠条，撑满右栏 -->
+    <div class="flex min-h-0 flex-1 flex-col gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <div class="flex min-h-0 flex-1 items-center gap-6">
+        <!-- 环形图 -->
+        <div class="relative flex h-36 w-36 shrink-0 items-center justify-center">
+          <svg viewBox="0 0 120 120" class="h-full w-full -rotate-90">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="currentColor" class="text-slate-100 dark:text-slate-800" stroke-width="14" />
+            <circle id="cp-arc-p" cx="60" cy="60" r="50" fill="none" stroke="var(--color-slate-400)" stroke-width="14" stroke-dasharray="0 999" />
+            <circle id="cp-arc-i" cx="60" cy="60" r="50" fill="none" stroke="var(--color-brand-500)" stroke-width="14" stroke-dasharray="0 999" />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-xs text-slate-400">收益占比</span>
+            <span id="cp-ring-label" class="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-300">—</span>
+          </div>
+        </div>
+        <!-- 堆叠条 + 图例 -->
+        <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4">
+          <div>
+            <div class="mb-1.5 flex justify-between text-xs text-slate-500 dark:text-slate-400">
+              <span>本金 vs 收益（占终值比例）</span>
+              <span id="cp-bar-label"></span>
+            </div>
+            <div class="flex h-12 w-full overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800">
+              <div id="cp-bar-p" class="flex items-center justify-center overflow-hidden bg-slate-400 text-sm font-bold text-white transition-all">—</div>
+              <div id="cp-bar-i" class="flex items-center justify-center overflow-hidden bg-brand-500 text-sm font-bold text-white transition-all">—</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
+              <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                <span class="inline-block h-2.5 w-2.5 rounded-full bg-slate-400"></span>累计投入本金
+              </div>
+              <div id="cp-principal" class="mt-1 text-lg font-bold tabular-nums text-slate-700 dark:text-slate-200">—</div>
+            </div>
+            <div class="rounded-lg bg-brand-50 p-3 dark:bg-brand-500/10">
+              <div class="flex items-center gap-1.5 text-xs text-brand-600 dark:text-brand-300">
+                <span class="inline-block h-2.5 w-2.5 rounded-full bg-brand-500"></span>累计收益
+              </div>
+              <div id="cp-interest" class="mt-1 text-lg font-bold tabular-nums text-brand-600 dark:text-brand-300">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="shrink-0 text-xs leading-relaxed text-slate-400">按每期复利计息，期末一次性计入；修改左侧参数后自动重新计算。</p>
+  </div>
+</Tool>
+
+<script>
+  import { calcCompound } from '../../lib/calc/compound';
+  import { fmt } from '../../lib/calc/format';
+
+  const p = document.getElementById('cp-p') as HTMLInputElement;
+  const c = document.getElementById('cp-c') as HTMLInputElement;
+  const r = document.getElementById('cp-r') as HTMLInputElement;
+  const y = document.getElementById('cp-y') as HTMLInputElement;
+  const f = document.getElementById('cp-f') as HTMLSelectElement;
+  const fv = document.getElementById('cp-fv') as HTMLDivElement;
+  const principal = document.getElementById('cp-principal') as HTMLDivElement;
+  const interestEl = document.getElementById('cp-interest') as HTMLDivElement;
+  const ratio = document.getElementById('cp-ratio') as HTMLDivElement;
+  const arcP = document.getElementById('cp-arc-p') as SVGCircleElement;
+  const arcI = document.getElementById('cp-arc-i') as SVGCircleElement;
+  const ringLabel = document.getElementById('cp-ring-label') as HTMLSpanElement;
+  const barP = document.getElementById('cp-bar-p') as HTMLDivElement;
+  const barI = document.getElementById('cp-bar-i') as HTMLDivElement;
+  const barLabel = document.getElementById('cp-bar-label') as HTMLSpanElement;
+
+  const R = 50;
+  const CIRC = 2 * Math.PI * R;
+
+  function compute() {
+    const P = parseFloat(p.value) || 0;
+    const C = parseFloat(c.value) || 0;
+    const RATE = parseFloat(r.value) || 0;
+    const Y = parseFloat(y.value) || 0;
+    if (Y <= 0) {
+      fv.textContent = '—';
+      return;
+    }
+    const res = calcCompound({ principal: P, monthlyContribution: C, annualRate: RATE, years: Y, compoundsPerYear: Number(f.value) });
+    fv.textContent = '¥' + fmt(res.futureValue);
+    principal.textContent = '¥' + fmt(res.totalContributions);
+    interestEl.textContent = '¥' + fmt(res.totalInterest);
+    const total = res.futureValue || 1;
+    const rp = (res.totalContributions / total) * 100;
+    const ri = (res.totalInterest / total) * 100;
+    ratio.textContent = rp.toFixed(1) + '% / ' + ri.toFixed(1) + '%';
+    ringLabel.textContent = ri.toFixed(1) + '%';
+    barLabel.textContent = `本金 ${rp.toFixed(1)}% · 收益 ${ri.toFixed(1)}%`;
+
+    // 环形图：本金弧 + 收益弧（从本金弧末端接续）
+    arcP.setAttribute('stroke-dasharray', `${(rp / 100) * CIRC} ${CIRC}`);
+    arcI.setAttribute('stroke-dasharray', `${(ri / 100) * CIRC} ${CIRC}`);
+    arcI.setAttribute('stroke-dashoffset', `${(-rp / 100) * CIRC}`);
+
+    // 堆叠条：宽度 + 段内百分比标签（过窄时隐藏文字）
+    barP.style.width = rp.toFixed(2) + '%';
+    barI.style.width = ri.toFixed(2) + '%';
+    barP.textContent = rp >= 10 ? rp.toFixed(1) + '%' : '';
+    barI.textContent = ri >= 10 ? ri.toFixed(1) + '%' : '';
+  }
+
+  [p, c, r, y, f].forEach((el) => el.addEventListener('input', compute));
+  [p, c, r, y, f].forEach((el) => el.addEventListener('change', compute));
+  compute();
+</script>

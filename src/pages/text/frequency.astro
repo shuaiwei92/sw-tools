@@ -1,0 +1,100 @@
+---
+import Tool from '../../layouts/Tool.astro';
+---
+
+<Tool
+  title="词频统计 · sw-tools"
+  description="中英文词频统计、TOP 排名与占比可视化，纯浏览器本地处理。"
+  toolName="词频统计"
+  categoryHref="/#text"
+  categoryName="文本处理"
+  inputLabel="文本"
+  outputLabel="词频排名"
+>
+  <label slot="output-tools" class="flex items-center gap-1.5 text-xs text-slate-500">
+    TOP
+    <input
+      id="topn"
+      type="number"
+      min="1"
+      max="200"
+      value="30"
+      class="w-16 rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
+    />
+  </label>
+  <label slot="output-tools" class="flex cursor-pointer items-center gap-1.5 text-xs text-slate-500">
+    <input type="checkbox" id="stop" class="accent-brand-600" checked />
+    过滤停用词
+  </label>
+  <button slot="output-tools" id="copy" class="tool-btn tool-btn-sm" title="复制排名">复制排名</button>
+
+  <textarea
+    slot="input"
+    id="src"
+    class="min-h-[14rem] w-full flex-1 resize-none bg-slate-50 p-3 text-sm leading-relaxed outline-none lg:min-h-0 dark:bg-slate-900/60"
+    spellcheck="false"
+    placeholder="粘贴需要统计的文本…"
+  >The quick brown fox jumps over the lazy dog. The dog was not amused at all.
+快速的棕色狐狸跳过了那只懒狗，狗一点也不觉得好笑。</textarea>
+
+  <div slot="output" class="flex min-h-0 flex-1 flex-col">
+    <div id="summary" class="hidden shrink-0 flex-wrap gap-2 border-b border-slate-200 px-3 py-2 text-sm dark:border-slate-700"></div>
+    <div id="list" class="min-h-0 flex-1 space-y-2 overflow-y-auto p-3"></div>
+  </div>
+</Tool>
+
+<script>
+  import { wordFrequency } from '../../lib/text/frequency';
+
+  const src = document.getElementById('src') as HTMLTextAreaElement;
+  const topn = document.getElementById('topn') as HTMLInputElement;
+  const stop = document.getElementById('stop') as HTMLInputElement;
+  const summary = document.getElementById('summary')!;
+  const list = document.getElementById('list')!;
+
+  let lastText = '';
+
+  function render() {
+    const n = Math.min(Math.max(Number(topn.value) || 30, 1), 200);
+    const r = wordFrequency(src.value, n, stop.checked);
+    const max = r.items.length ? r.items[0].count : 1;
+
+    summary.classList.remove('hidden');
+    summary.classList.add('flex');
+    summary.innerHTML = [
+      `<span class="rounded-md bg-brand-50 px-2 py-1 font-medium text-brand-700 dark:bg-brand-950 dark:text-brand-300">总词次 ${r.total}</span>`,
+      `<span class="rounded-md bg-slate-100 px-2 py-1 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">独特词 ${r.unique}</span>`,
+    ].join('');
+
+    list.innerHTML = r.items.length
+      ? r.items
+          .map(
+            (it, i) => `
+      <div class="flex items-center gap-2 text-sm">
+        <span class="w-6 shrink-0 text-right text-xs text-slate-400 tabular-nums">${i + 1}</span>
+        <span class="w-24 shrink-0 truncate font-mono text-xs" title="${it.word.replace(/"/g, '&quot;')}">${it.word.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string)}</span>
+        <span class="h-2 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+          <span class="block h-full rounded-full bg-brand-500" style="width: ${(it.count / max) * 100}%"></span>
+        </span>
+        <span class="w-14 shrink-0 text-right text-xs tabular-nums text-slate-500">${it.count} 次</span>
+        <span class="w-12 shrink-0 text-right text-xs tabular-nums text-slate-400">${it.percent}%</span>
+      </div>`
+          )
+          .join('')
+      : '<span class="text-sm text-slate-400">没有可统计的内容</span>';
+
+    lastText = r.items.map((it) => `${it.word}\t${it.count}\t${it.percent}%`).join('\n');
+  }
+
+  src.addEventListener('input', render);
+  topn.addEventListener('change', render);
+  stop.addEventListener('change', render);
+  document.getElementById('copy')!.addEventListener('click', async () => {
+    if (!lastText) return;
+    await navigator.clipboard.writeText(lastText);
+    const btn = document.getElementById('copy') as HTMLButtonElement;
+    btn.textContent = '已复制';
+    setTimeout(() => (btn.textContent = '复制排名'), 1200);
+  });
+  render();
+</script>
