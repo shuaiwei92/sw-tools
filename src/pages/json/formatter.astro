@@ -189,6 +189,9 @@ import Icon from '../../components/Icon.astro';
   let hasValidOutput = false;
   // 当前「视图模式」：失焦自动应用的就是该模式。点「压缩」后切到 minify 并持续保持，直到再次点「格式化 / 排序键」。
   let currentMode: 'format' | 'minify' | 'sort' = 'format';
+  // 上次「用于生成输出」的输入快照：仅当输入自上次生成后发生变化时，失焦才重新生成，
+  // 既修复「二次输入不刷新」缺陷，也避免无意义的重复刷新（不丢失树视图展开/折叠状态）。
+  let lastGeneratedInput = '';
   const TREE_EMPTY_HINT =
     '<div class="text-slate-400">在左侧粘贴 JSON 后，此处显示结构化树视图，支持点击节点折叠 / 展开。「展开全部 / 折叠全部」可一键控制嵌套层级。</div>';
 
@@ -409,7 +412,9 @@ import Icon from '../../components/Icon.astro';
     input.value = transformed;
     output.value = transformed;
     hasValidOutput = true;
+    lastGeneratedInput = input.value;
     renderTreeFromInput();
+    addHistory(input.value); // 处理成功后写入历史记录（addHistory 内部去重并渲染列表）
     setStatus(msg);
   }
 
@@ -417,6 +422,7 @@ import Icon from '../../components/Icon.astro';
   function showOutputText(text: string, msg: string, isError = false) {
     output.value = text;
     hasValidOutput = false;
+    lastGeneratedInput = input.value;
     showOutputView();
     setStatus(msg, !isError);
   }
@@ -644,6 +650,11 @@ import Icon from '../../components/Icon.astro';
     const el = e.target as HTMLElement;
     const path = JSON.parse(el.dataset.vpath as string) as (string | number)[];
     const raw = (el.textContent ?? '').trim();
+    const current = getDataAt(path);
+    const display = current === null ? 'null' : String(current);
+    // 未做任何编辑（仅点击聚焦后失焦）：直接返回，不触碰左侧输入框
+    // ——否则点一下树视图里的值，输入框就会被 JSON.stringify 重新格式化
+    if (raw === display) return;
     let parsed: unknown;
     if (raw === '') {
       parsed = '';
@@ -654,6 +665,8 @@ import Icon from '../../components/Icon.astro';
         parsed = el.textContent ?? '';
       }
     }
+    // 解析结果与原值相同（如把数字原样保留）同样视为未修改
+    if (JSON.stringify(parsed) === JSON.stringify(current)) return;
     setDataAtPath(path, parsed);
     serializeAndSync('✓ 已修改值，左侧 JSON 已同步');
   }
@@ -895,11 +908,13 @@ import Icon from '../../components/Icon.astro';
   input.addEventListener('input', refreshGutters);
   input.addEventListener('scroll', syncInputGutter);
 
-  // 输入框失焦时：若右侧尚无输出且输入为合法 JSON，按当前模式自动生成结果（不改动输入框内容）
+  // 输入框失焦时：输入为合法 JSON，且（右侧尚无输出 或 输入自上次生成后已变化）时，按当前模式自动生成结果（不改动输入框内容）。
+  // 注意：不能用「右侧是否有内容」作为唯一开关——否则首次生成结果后，二次修改输入再失焦会被拦截、输出永不刷新。
   input.addEventListener('blur', () => {
-    if (output.value.trim()) return;
     const text = input.value.trim();
     if (!text) return;
+    // 右侧已有输出且输入未变化 → 无需刷新（保持树视图展开/折叠状态）
+    if (output.value.trim() && input.value === lastGeneratedInput) return;
     const r = validateJson(text);
     if (!r.ok) return;
     const out =
@@ -910,7 +925,9 @@ import Icon from '../../components/Icon.astro';
           : formatJson(text, getIndent());
     output.value = out;
     hasValidOutput = true;
+    lastGeneratedInput = input.value;
     renderTreeFromInput();
+    addHistory(text); // 自动生成成功后同样写入历史记录
     setStatus('已在右侧生成结果（点击按钮可切换模式或重新处理）');
   });
 
@@ -930,6 +947,7 @@ import Icon from '../../components/Icon.astro';
     input.value = res.value!;
     output.value = res.value!;
     hasValidOutput = true;
+    lastGeneratedInput = input.value;
     renderTreeFromInput();
     const label = currentMode === 'minify' ? '压缩' : currentMode === 'sort' ? '排序' : '格式化';
     setStatus(`已按 ${indentSel.value === 'tab' ? 'Tab' : indentSel.value + ' 空格'} 缩进重新${label}`);
